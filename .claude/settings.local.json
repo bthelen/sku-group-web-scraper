@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sku-scraper scrape *)",
+      "Read(//tmp/sku-test/**)"
+    ]
+  }
+}
