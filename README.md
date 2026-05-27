@@ -4,7 +4,12 @@ A CLI tool that scrapes Google Cloud SKU Group pages and exports SKU ID lists as
 
 ## What it does
 
-For any SKU group listed at [cloud.google.com/skus/sku-groups](https://cloud.google.com/skus/sku-groups), the tool fetches all SKU IDs and writes two files:
+For any SKU group listed at [cloud.google.com/skus/sku-groups](https://cloud.google.com/skus/sku-groups), the tool can:
+
+- **Scrape** a group and export its SKU IDs as text files ready for use in SQL queries
+- **Search** across all groups by SKU ID or SKU name to find which groups contain a given SKU
+
+Scrape output files:
 
 - `<group>-skus.txt` — one SKU ID per line
 - `<group>-where-clause.txt` — SKU IDs quoted and comma-separated, ready to paste into a SQL `WHERE` clause
@@ -55,6 +60,72 @@ sku-scraper scrape bigquery --output-dir ~/sku-exports
 
 The directory is created if it does not exist.
 
+---
+
+## Searching for SKU groups by ID or name
+
+The `search` command lets you look up which SKU groups contain a given SKU ID or name. It works from a local cache so it doesn't need to re-fetch every group page each time you search.
+
+### Search by exact SKU ID
+
+```bash
+sku-scraper search --id 947D-3B46-7781
+```
+
+Example output:
+```
+SKU ID : 947D-3B46-7781
+Name   : Active Logical Storage
+Groups : bigquery, cloud-storage
+```
+
+### Search by SKU name
+
+Matches any SKU whose name contains the search text (case-insensitive).
+
+```bash
+sku-scraper search --name "active logical storage"
+```
+
+Example output:
+```
+SKU ID          SKU NAME                              GROUPS
+----------------------------------------------------------------------
+947D-3B46-7781  Active Logical Storage                bigquery, cloud-storage
+C493-D992-4C50  Active Logical Storage (asia-east1)   bigquery
+...
+```
+
+### How the cache works
+
+The first time you run `search`, the tool automatically fetches all SKU group pages in parallel and saves an index to your OS cache directory (`~/Library/Caches/sku-scraper/index.json` on macOS). Subsequent searches are instant.
+
+The cache is flagged as stale after 7 days. To rebuild it manually:
+
+```bash
+sku-scraper build-cache
+```
+
+To force a rebuild even if the cache is fresh:
+
+```bash
+sku-scraper build-cache --force
+```
+
+To control how many pages are fetched in parallel (default: 10):
+
+```bash
+sku-scraper build-cache --workers 20
+```
+
+To force a rebuild as part of a search in one step:
+
+```bash
+sku-scraper search --name "storage" --rebuild
+```
+
+---
+
 ### Output file format
 
 **`bigquery-skus.txt`**
@@ -86,13 +157,15 @@ pip install -e ".[dev]"
 
 ```
 src/sku_scraper/
-├── cli.py       # Click CLI — list and scrape commands
+├── cli.py       # Click CLI — list, scrape, search, build-cache commands
 ├── scraper.py   # HTTP fetching and HTML parsing
+├── cache.py     # Index building (parallel), cache save/load
 └── writer.py    # Output file generation
 tests/
 ├── conftest.py  # Shared HTML fixtures
 ├── test_cli.py
 ├── test_scraper.py
+├── test_cache.py
 └── test_writer.py
 pyproject.toml   # Package metadata, dependencies, tool config
 ```
@@ -117,6 +190,8 @@ pytest --cov=sku_scraper --cov-report=term-missing
 | `requests` | HTTP client |
 | `beautifulsoup4` | HTML parsing |
 | `lxml` | Fast HTML parser backend |
+| `platformdirs` | OS-appropriate cache directory |
+| `tqdm` | Progress bar for cache builds |
 | `pytest` | Test runner |
 | `pytest-cov` | Coverage reporting |
 | `responses` | HTTP mocking in tests |
@@ -124,6 +199,6 @@ pytest --cov=sku_scraper --cov-report=term-missing
 ### Keeping dependencies up to date
 
 ```bash
-pip install --upgrade click requests beautifulsoup4 lxml
+pip install --upgrade click requests beautifulsoup4 lxml platformdirs tqdm
 pip install --upgrade pytest pytest-cov responses
 ```
