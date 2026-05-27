@@ -36,6 +36,12 @@ GROUP_HTML = """
 
 EXPECTED_SKU_IDS = ["947D-3B46-7781", "C493-D992-4C50", "1234-ABCD-5678"]
 
+EXPECTED_SKU_ENTRIES = [
+    {"id": "947D-3B46-7781", "name": "Active Logical Storage"},
+    {"id": "C493-D992-4C50", "name": "Active Logical Storage (asia-east1)"},
+    {"id": "1234-ABCD-5678", "name": "Analysis"},
+]
+
 
 @pytest.fixture
 def index_html() -> str:
@@ -50,3 +56,8 @@ def group_html() -> str:
 @pytest.fixture
 def expected_sku_ids() -> list[str]:
     return EXPECTED_SKU_IDS
+
+
+@pytest.fixture
+def expected_sku_entries() -> list[dict[str, str]]:
+    return EXPECTED_SKU_ENTRIES

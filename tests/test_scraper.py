@@ -3,6 +3,7 @@ import responses as resp_mock
 
 from sku_scraper.scraper import (
     INDEX_URL,
+    fetch_sku_entries,
     fetch_sku_groups,
     fetch_sku_ids,
     validate_slug,
@@ -72,6 +73,52 @@ class TestFetchSkuGroups:
         import requests
         with pytest.raises(requests.HTTPError):
             fetch_sku_groups(session)
+
+
+class TestFetchSkuEntries:
+    GROUP_URL = "https://cloud.google.com/skus/sku-groups/bigquery"
+
+    @resp_mock.activate
+    def test_extracts_id_and_name(self, group_html, expected_sku_entries):
+        resp_mock.add(resp_mock.GET, self.GROUP_URL, body=group_html, status=200)
+        session = _make_session()
+        entries = fetch_sku_entries(session, self.GROUP_URL)
+        assert entries == expected_sku_entries
+
+    @resp_mock.activate
+    def test_deduplicates_by_id(self):
+        html = """<html><body><table>
+          <tr><td>Svc</td><td>Name A</td><td><a href="#">947D-3B46-7781</a></td><td></td></tr>
+          <tr><td>Svc</td><td>Name B</td><td><a href="#">947D-3B46-7781</a></td><td></td></tr>
+          <tr><td>Svc</td><td>Name C</td><td><a href="#">C493-D992-4C50</a></td><td></td></tr>
+        </table></body></html>"""
+        resp_mock.add(resp_mock.GET, self.GROUP_URL, body=html, status=200)
+        session = _make_session()
+        entries = fetch_sku_entries(session, self.GROUP_URL)
+        ids = [e["id"] for e in entries]
+        assert ids == ["947D-3B46-7781", "C493-D992-4C50"]
+
+    @resp_mock.activate
+    def test_name_empty_when_not_in_table_row(self):
+        html = """<html><body>
+          <a href="#">947D-3B46-7781</a>
+        </body></html>"""
+        resp_mock.add(resp_mock.GET, self.GROUP_URL, body=html, status=200)
+        session = _make_session()
+        entries = fetch_sku_entries(session, self.GROUP_URL)
+        assert entries[0]["name"] == ""
+
+    def test_rejects_invalid_url(self):
+        session = _make_session()
+        with pytest.raises(ValueError, match="not an allowed SKU group URL"):
+            fetch_sku_entries(session, "https://evil.example.com/skus/sku-groups/bigquery")
+
+    @resp_mock.activate
+    def test_returns_empty_list_when_no_skus(self):
+        html = "<html><body><p>No SKUs here.</p></body></html>"
+        resp_mock.add(resp_mock.GET, self.GROUP_URL, body=html, status=200)
+        session = _make_session()
+        assert fetch_sku_entries(session, self.GROUP_URL) == []
 
 
 class TestFetchSkuIds:

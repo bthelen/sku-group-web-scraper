@@ -47,8 +47,8 @@ def fetch_sku_groups(session: requests.Session) -> dict[str, str]:
     return groups
 
 
-def fetch_sku_ids(session: requests.Session, url: str) -> list[str]:
-    """Return a deduplicated, order-preserving list of SKU IDs from a group page."""
+def fetch_sku_entries(session: requests.Session, url: str) -> list[dict[str, str]]:
+    """Return deduplicated, order-preserving list of {id, name} dicts from a group page."""
     if not url.startswith(ALLOWED_URL_PREFIX):
         raise ValueError(
             f"URL {url!r} is not an allowed SKU group URL. "
@@ -59,10 +59,24 @@ def fetch_sku_ids(session: requests.Session, url: str) -> list[str]:
     soup = BeautifulSoup(response.text, "lxml")
 
     seen: set[str] = set()
-    sku_ids: list[str] = []
+    entries: list[dict[str, str]] = []
     for anchor in soup.find_all("a"):
         text = anchor.get_text(strip=True)
-        if SKU_ID_RE.match(text) and text not in seen:
-            seen.add(text)
-            sku_ids.append(text)
-    return sku_ids
+        if not SKU_ID_RE.match(text) or text in seen:
+            continue
+        seen.add(text)
+        name = ""
+        parent_td = anchor.parent
+        if parent_td and parent_td.name == "td":
+            row = parent_td.parent
+            if row and row.name == "tr":
+                cells = row.find_all("td")
+                if len(cells) >= 2:
+                    name = cells[1].get_text(strip=True)
+        entries.append({"id": text, "name": name})
+    return entries
+
+
+def fetch_sku_ids(session: requests.Session, url: str) -> list[str]:
+    """Return a deduplicated, order-preserving list of SKU IDs from a group page."""
+    return [e["id"] for e in fetch_sku_entries(session, url)]

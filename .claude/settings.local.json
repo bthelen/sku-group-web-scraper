@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(sku-scraper scrape *)",
-      "Read(//tmp/sku-test/**)"
+      "Read(//tmp/sku-test/**)",
+      "Bash(pip install *)",
+      "Bash(pytest *)"
     ]
   }
 }
