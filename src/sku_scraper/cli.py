@@ -165,6 +165,9 @@ def search(sku_id: str | None, sku_name: str | None, rebuild: bool, workers: int
                 err=True,
             )
 
+    built_at = index.get("built_at", "unknown")
+    click.echo(f"Cache built: {built_at}", err=True)
+
     by_id: dict = index["by_id"]
 
     if sku_id:
