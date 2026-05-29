@@ -121,6 +121,23 @@ def build_cache_cmd(workers: int, force: bool) -> None:
         click.echo(click.style(f"  WARNING  {slug}: {err}", fg="yellow"), err=True)
 
 
+_GROUP_COLORS = ["cyan", "green", "yellow", "magenta", "bright_blue", "bright_red"]
+
+
+def _group_color_map(groups: list[str] | set[str]) -> dict[str, str]:
+    """Assign a stable color to each group slug (sorted alphabetically)."""
+    return {
+        slug: _GROUP_COLORS[i % len(_GROUP_COLORS)]
+        for i, slug in enumerate(sorted(groups))
+    }
+
+
+def _colorize_groups(groups: list[str], color_map: dict[str, str]) -> str:
+    return ", ".join(
+        click.style(g, fg=color_map.get(g, "white")) for g in sorted(groups)
+    )
+
+
 @main.command()
 @click.option("--id", "sku_id", default=None, metavar="SKU_ID", help="Search by exact SKU ID.")
 @click.option("--name", "sku_name", default=None, metavar="TEXT", help="Search by SKU name (case-insensitive substring).")
@@ -175,9 +192,10 @@ def search(sku_id: str | None, sku_name: str | None, rebuild: bool, workers: int
         if entry is None:
             click.echo(f"No groups found for SKU ID {sku_id!r}.")
             return
+        color_map = _group_color_map(entry["groups"])
         click.echo(f"SKU ID : {sku_id}")
         click.echo(f"Name   : {entry['name']}")
-        click.echo(f"Groups : {', '.join(sorted(entry['groups']))}")
+        click.echo(f"Groups : {_colorize_groups(entry['groups'], color_map)}")
     else:
         query = sku_name.lower()
         matches = sorted(
@@ -187,10 +205,12 @@ def search(sku_id: str | None, sku_name: str | None, rebuild: bool, workers: int
         if not matches:
             click.echo(f"No SKUs found matching name {sku_name!r}.")
             return
+        all_groups = {g for _, e in matches for g in e["groups"]}
+        color_map = _group_color_map(all_groups)
         id_w = max(len(sid) for sid, _ in matches)
         name_w = max(len(e["name"]) for _, e in matches)
         click.echo(f"{'SKU ID':<{id_w}}  {'SKU NAME':<{name_w}}  GROUPS")
         click.echo("-" * (id_w + name_w + 30))
         for sid, entry in matches:
-            groups_str = ", ".join(sorted(entry["groups"]))
+            groups_str = _colorize_groups(entry["groups"], color_map)
             click.echo(f"{sid:<{id_w}}  {entry['name']:<{name_w}}  {groups_str}")
