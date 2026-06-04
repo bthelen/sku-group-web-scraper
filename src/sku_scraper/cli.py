@@ -132,9 +132,14 @@ def _group_color_map(groups: list[str] | set[str]) -> dict[str, str]:
     }
 
 
+def _group_sort_key(slug: str) -> tuple[int, str]:
+    return (1 if "deprecat" in slug else 0, slug)
+
+
 def _colorize_groups(groups: list[str], color_map: dict[str, str]) -> str:
     return ", ".join(
-        click.style(g, fg=color_map.get(g, "white")) for g in sorted(groups)
+        click.style(g, fg=color_map.get(g, "white"))
+        for g in sorted(groups, key=_group_sort_key)
     )
 
 

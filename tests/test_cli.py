@@ -4,13 +4,35 @@ from unittest.mock import MagicMock, patch
 import pytest
 from click.testing import CliRunner
 
-from sku_scraper.cli import main
+from sku_scraper.cli import main, _group_sort_key
 
 GROUPS = {
     "bigquery": "https://cloud.google.com/skus/sku-groups/bigquery",
     "cloud-storage": "https://cloud.google.com/skus/sku-groups/cloud-storage",
 }
 SKU_IDS = ["947D-3B46-7781", "C493-D992-4C50"]
+
+
+class TestGroupSortKey:
+    def test_non_deprecated_sorts_before_deprecated(self):
+        groups = ["bigquery", "compute-engine-deprecated", "cloud-storage"]
+        assert sorted(groups, key=_group_sort_key) == [
+            "bigquery", "cloud-storage", "compute-engine-deprecated"
+        ]
+
+    def test_deprecated_variants_sorted_alphabetically_among_themselves(self):
+        groups = ["z-deprecated", "a-deprecated", "bigquery"]
+        assert sorted(groups, key=_group_sort_key) == [
+            "bigquery", "a-deprecated", "z-deprecated"
+        ]
+
+    def test_non_deprecated_sorted_alphabetically(self):
+        groups = ["storage", "bigquery", "compute"]
+        assert sorted(groups, key=_group_sort_key) == ["bigquery", "compute", "storage"]
+
+    def test_deprecate_substring_match(self):
+        groups = ["old-deprecate-sku-group", "bigquery"]
+        assert sorted(groups, key=_group_sort_key)[0] == "bigquery"
 
 
 @pytest.fixture
