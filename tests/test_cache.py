@@ -7,8 +7,8 @@ import pytest
 from sku_scraper import cache
 
 GROUPS = {
-    "bigquery": "https://cloud.google.com/skus/sku-groups/bigquery",
-    "cloud-storage": "https://cloud.google.com/skus/sku-groups/cloud-storage",
+    "bigquery": {"url": "https://cloud.google.com/skus/sku-groups/bigquery", "name": "BigQuery"},
+    "cloud-storage": {"url": "https://cloud.google.com/skus/sku-groups/cloud-storage", "name": "Cloud Storage"},
 }
 
 BIGQUERY_ENTRIES = [
@@ -73,10 +73,15 @@ class TestBuildIndex:
         assert "cloud-storage" not in errors
         assert "AAAA-1111-BBBB" in index["by_id"]
 
+    def test_stores_group_names_in_index(self):
+        with patch("sku_scraper.cache.scraper.fetch_sku_entries", side_effect=_side_effect):
+            index, _ = cache.build_index(MagicMock(), GROUPS, workers=2, show_progress=False)
+        assert index["group_names"] == {"bigquery": "BigQuery", "cloud-storage": "Cloud Storage"}
+
     def test_no_duplicate_groups_for_shared_sku(self):
         groups = {
-            "a": "https://cloud.google.com/skus/sku-groups/a",
-            "b": "https://cloud.google.com/skus/sku-groups/b",
+            "a": {"url": "https://cloud.google.com/skus/sku-groups/a", "name": "A"},
+            "b": {"url": "https://cloud.google.com/skus/sku-groups/b", "name": "B"},
         }
         shared_entry = [{"id": "AAAA-1111-BBBB", "name": "Same SKU"}]
 

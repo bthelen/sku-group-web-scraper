@@ -17,12 +17,13 @@ STALE_AFTER_DAYS = 7
 
 def build_index(
     session,
-    groups: dict[str, str],
+    groups: dict[str, dict[str, str]],
     workers: int = 10,
     show_progress: bool = True,
 ) -> tuple[dict, dict[str, str]]:
     """Fetch all groups in parallel and build an inverted SKU ID index.
 
+    groups is {slug: {"url": ..., "name": ...}}.
     Returns (index_dict, errors) where errors is {slug: error_message}.
     """
     by_id: dict[str, dict] = {}
@@ -30,8 +31,8 @@ def build_index(
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
         futures = {
-            executor.submit(scraper.fetch_sku_entries, session, url): slug
-            for slug, url in groups.items()
+            executor.submit(scraper.fetch_sku_entries, session, info["url"]): slug
+            for slug, info in groups.items()
         }
         progress = tqdm(
             as_completed(futures),
@@ -58,6 +59,7 @@ def build_index(
 
     index = {
         "built_at": datetime.now(timezone.utc).isoformat(),
+        "group_names": {slug: info["name"] for slug, info in groups.items()},
         "by_id": by_id,
     }
     return index, errors

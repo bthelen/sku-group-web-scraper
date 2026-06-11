@@ -28,8 +28,8 @@ def list_groups() -> None:
     max_slug = max(len(s) for s in groups)
     click.echo(f"{'SLUG':<{max_slug}}  URL")
     click.echo("-" * (max_slug + 50))
-    for slug, url in sorted(groups.items()):
-        click.echo(f"{slug:<{max_slug}}  {url}")
+    for slug, info in sorted(groups.items()):
+        click.echo(f"{slug:<{max_slug}}  {info['url']}")
 
 
 @main.command()
@@ -61,7 +61,7 @@ def scrape(groups: tuple[str, ...], scrape_all: bool, output_dir: Path) -> None:
             all_groups = scraper.fetch_sku_groups(session)
         except requests.RequestException as exc:
             raise click.ClickException(f"Failed to fetch SKU group index: {exc}") from exc
-        slugs_to_urls = all_groups
+        slugs_to_urls = {slug: info["url"] for slug, info in all_groups.items()}
     else:
         try:
             validated = [scraper.validate_slug(g) for g in groups]
@@ -136,13 +136,6 @@ def _group_sort_key(slug: str) -> tuple[int, str]:
     return (1 if "deprecat" in slug else 0, slug)
 
 
-def _colorize_groups(groups: list[str], color_map: dict[str, str]) -> str:
-    return ", ".join(
-        click.style(g, fg=color_map.get(g, "white"))
-        for g in sorted(groups, key=_group_sort_key)
-    )
-
-
 @main.command()
 @click.option("--id", "sku_id", default=None, metavar="SKU_ID", help="Search by exact SKU ID.")
 @click.option("--name", "sku_name", default=None, metavar="TEXT", help="Search by SKU name (case-insensitive substring).")
@@ -190,6 +183,12 @@ def search(sku_id: str | None, sku_name: str | None, rebuild: bool, workers: int
     built_at = index.get("built_at", "unknown")
     click.echo(f"Cache built: {built_at}", err=True)
 
+    group_names: dict[str, str] = index.get("group_names", {})
+    if not group_names and "group_names" not in index:
+        click.echo(
+            click.style("Note: cache is missing group display names. Run 'build-cache --force' to add them.", fg="yellow"),
+            err=True,
+        )
     by_id: dict = index["by_id"]
 
     if sku_id:
@@ -197,10 +196,19 @@ def search(sku_id: str | None, sku_name: str | None, rebuild: bool, workers: int
         if entry is None:
             click.echo(f"No groups found for SKU ID {sku_id!r}.")
             return
-        color_map = _group_color_map(entry["groups"])
+        sorted_groups = sorted(entry["groups"], key=_group_sort_key)
+        color_map = _group_color_map(sorted_groups)
         click.echo(f"SKU ID : {sku_id}")
         click.echo(f"Name   : {entry['name']}")
-        click.echo(f"Groups : {_colorize_groups(entry['groups'], color_map)}")
+        click.echo(f"Groups :")
+        if group_names:
+            name_w = max(len(group_names.get(g, g)) for g in sorted_groups)
+            for g in sorted_groups:
+                color = color_map[g]
+                click.echo(f"  {click.style(f'{group_names[g]:<{name_w}}', fg=color)}  {click.style(g, fg=color)}")
+        else:
+            for g in sorted_groups:
+                click.echo(f"  {click.style(g, fg=color_map[g])}")
     else:
         query = sku_name.lower()
         matches = sorted(
@@ -210,12 +218,32 @@ def search(sku_id: str | None, sku_name: str | None, rebuild: bool, workers: int
         if not matches:
             click.echo(f"No SKUs found matching name {sku_name!r}.")
             return
-        all_groups = {g for _, e in matches for g in e["groups"]}
-        color_map = _group_color_map(all_groups)
-        id_w = max(len(sid) for sid, _ in matches)
-        name_w = max(len(e["name"]) for _, e in matches)
-        click.echo(f"{'SKU ID':<{id_w}}  {'SKU NAME':<{name_w}}  GROUPS")
-        click.echo("-" * (id_w + name_w + 30))
-        for sid, entry in matches:
-            groups_str = _colorize_groups(entry["groups"], color_map)
-            click.echo(f"{sid:<{id_w}}  {entry['name']:<{name_w}}  {groups_str}")
+
+        # One row per (SKU, group) so name and slug each get their own column.
+        rows = [
+            (sid, entry["name"], g)
+            for sid, entry in matches
+            for g in sorted(entry["groups"], key=_group_sort_key)
+        ]
+        color_map = _group_color_map({slug for _, _, slug in rows})
+        id_w = max(len(r[0]) for r in rows)
+        sku_name_w = max(len(r[1]) for r in rows)
+
+        if group_names:
+            gname_w = max(len(group_names.get(slug, slug)) for _, _, slug in rows)
+            click.echo(f"{'SKU ID':<{id_w}}  {'SKU NAME':<{sku_name_w}}  {'GROUP NAME':<{gname_w}}  GROUP SLUG")
+            click.echo("-" * (id_w + sku_name_w + gname_w + 30))
+            for sku_id_val, sku_name_val, slug in rows:
+                color = color_map[slug]
+                gname = group_names.get(slug, slug)
+                click.echo(
+                    f"{sku_id_val:<{id_w}}  {sku_name_val:<{sku_name_w}}"
+                    f"  {click.style(f'{gname:<{gname_w}}', fg=color)}"
+                    f"  {click.style(slug, fg=color)}"
+                )
+        else:
+            click.echo(f"{'SKU ID':<{id_w}}  {'SKU NAME':<{sku_name_w}}  GROUP SLUG")
+            click.echo("-" * (id_w + sku_name_w + 30))
+            for sku_id_val, sku_name_val, slug in rows:
+                color = color_map[slug]
+                click.echo(f"{sku_id_val:<{id_w}}  {sku_name_val:<{sku_name_w}}  {click.style(slug, fg=color)}")

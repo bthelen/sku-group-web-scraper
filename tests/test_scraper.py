@@ -56,7 +56,8 @@ class TestFetchSkuGroups:
         assert "bigquery" in groups
         assert "cloud-storage" in groups
         assert "compute-engine" in groups
-        assert groups["bigquery"] == "https://cloud.google.com/skus/sku-groups/bigquery"
+        assert groups["bigquery"]["url"] == "https://cloud.google.com/skus/sku-groups/bigquery"
+        assert groups["bigquery"]["name"] == "BigQuery"
 
     @resp_mock.activate
     def test_ignores_unrelated_links(self, index_html):

@@ -7,8 +7,8 @@ from click.testing import CliRunner
 from sku_scraper.cli import main, _group_sort_key
 
 GROUPS = {
-    "bigquery": "https://cloud.google.com/skus/sku-groups/bigquery",
-    "cloud-storage": "https://cloud.google.com/skus/sku-groups/cloud-storage",
+    "bigquery": {"url": "https://cloud.google.com/skus/sku-groups/bigquery", "name": "BigQuery"},
+    "cloud-storage": {"url": "https://cloud.google.com/skus/sku-groups/cloud-storage", "name": "Cloud Storage"},
 }
 SKU_IDS = ["947D-3B46-7781", "C493-D992-4C50"]
 
@@ -152,6 +152,10 @@ class TestScrapeCommand:
 
 SAMPLE_INDEX = {
     "built_at": "2026-01-01T00:00:00+00:00",
+    "group_names": {
+        "bigquery": "BigQuery",
+        "cloud-storage": "Cloud Storage",
+    },
     "by_id": {
         "947D-3B46-7781": {"name": "Active Logical Storage", "groups": ["bigquery", "cloud-storage"]},
         "C493-D992-4C50": {"name": "Active Logical Storage (asia-east1)", "groups": ["bigquery"]},
@@ -206,8 +210,18 @@ class TestSearchCommand:
         assert result.exit_code == 0
         assert "947D-3B46-7781" in result.output
         assert "Active Logical Storage" in result.output
+        assert "BigQuery" in result.output
         assert "bigquery" in result.output
+        assert "Cloud Storage" in result.output
         assert "cloud-storage" in result.output
+
+    def test_search_by_id_shows_each_group_on_own_line(self, runner):
+        with patch("sku_scraper.cli.cache.load_cache", return_value=SAMPLE_INDEX), \
+             patch("sku_scraper.cli.cache.cache_age_seconds", return_value=3600.0):
+            result = runner.invoke(main, ["search", "--id", "947D-3B46-7781"])
+        lines = result.output.splitlines()
+        group_lines = [l for l in lines if "bigquery" in l.lower() or "cloud-storage" in l.lower()]
+        assert len(group_lines) == 2
 
     def test_search_by_id_not_found(self, runner):
         with patch("sku_scraper.cli.cache.load_cache", return_value=SAMPLE_INDEX), \
@@ -223,6 +237,10 @@ class TestSearchCommand:
         assert result.exit_code == 0
         assert "947D-3B46-7781" in result.output
         assert "C493-D992-4C50" in result.output
+        assert "BigQuery" in result.output
+        assert "bigquery" in result.output
+        assert "GROUP NAME" in result.output
+        assert "GROUP SLUG" in result.output
 
     def test_search_by_name_case_insensitive(self, runner):
         with patch("sku_scraper.cli.cache.load_cache", return_value=SAMPLE_INDEX), \
@@ -257,6 +275,25 @@ class TestSearchCommand:
             result = runner.invoke(main, ["search", "--id", "947D-3B46-7781"])
         assert result.exit_code == 0
         assert "947D-3B46-7781" in result.output
+
+    def test_search_by_id_no_duplicate_when_group_names_missing(self, runner):
+        index = {k: v for k, v in SAMPLE_INDEX.items() if k != "group_names"}
+        with patch("sku_scraper.cli.cache.load_cache", return_value=index), \
+             patch("sku_scraper.cli.cache.cache_age_seconds", return_value=3600.0):
+            result = runner.invoke(main, ["search", "--id", "947D-3B46-7781"])
+        assert result.exit_code == 0
+        for line in result.output.splitlines():
+            assert line.count("bigquery") <= 1, f"Slug duplicated on same line: {line!r}"
+            assert line.count("cloud-storage") <= 1, f"Slug duplicated on same line: {line!r}"
+
+    def test_search_by_name_no_duplicate_when_group_names_missing(self, runner):
+        index = {k: v for k, v in SAMPLE_INDEX.items() if k != "group_names"}
+        with patch("sku_scraper.cli.cache.load_cache", return_value=index), \
+             patch("sku_scraper.cli.cache.cache_age_seconds", return_value=3600.0):
+            result = runner.invoke(main, ["search", "--name", "active logical"])
+        assert result.exit_code == 0
+        for line in result.output.splitlines():
+            assert line.count("bigquery") <= 1, f"Slug duplicated on same line: {line!r}"
 
     def test_rebuild_flag_ignores_existing_cache(self, runner):
         with patch("sku_scraper.cli.cache.load_cache", return_value=SAMPLE_INDEX) as mock_load, \
