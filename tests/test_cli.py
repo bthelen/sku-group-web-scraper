@@ -314,6 +314,67 @@ class TestSearchCommand:
         alpha_idx = next(i for i, l in enumerate(lines) if "AAAA-0000-0001" in l)
         assert beta_idx < alpha_idx, "Non-deprecated group row should appear before deprecated group row"
 
+    def test_ignore_deprecated_filters_id_results(self, runner):
+        index = {
+            "built_at": "2026-01-01T00:00:00+00:00",
+            "group_names": {"bigquery": "BigQuery", "deprecated-compute": "Deprecated Compute"},
+            "by_id": {
+                "947D-3B46-7781": {"name": "Active Logical Storage", "groups": ["bigquery", "deprecated-compute"]},
+            },
+        }
+        with patch("sku_scraper.cli.cache.load_cache", return_value=index), \
+             patch("sku_scraper.cli.cache.cache_age_seconds", return_value=3600.0):
+            result = runner.invoke(main, ["search", "--id", "947D-3B46-7781", "--ignore-deprecated"])
+        assert result.exit_code == 0
+        assert "bigquery" in result.output
+        assert "deprecated-compute" not in result.output
+
+    def test_ignore_deprecated_shows_not_found_when_all_groups_filtered(self, runner):
+        index = {
+            "built_at": "2026-01-01T00:00:00+00:00",
+            "group_names": {"deprecated-compute": "Deprecated Compute"},
+            "by_id": {
+                "DDDD-0000-0001": {"name": "Deprecated Only SKU", "groups": ["deprecated-compute"]},
+            },
+        }
+        with patch("sku_scraper.cli.cache.load_cache", return_value=index), \
+             patch("sku_scraper.cli.cache.cache_age_seconds", return_value=3600.0):
+            result = runner.invoke(main, ["search", "--id", "DDDD-0000-0001", "--ignore-deprecated"])
+        assert result.exit_code == 0
+        assert "No groups found" in result.output
+
+    def test_ignore_deprecated_filters_name_results(self, runner):
+        index = {
+            "built_at": "2026-01-01T00:00:00+00:00",
+            "group_names": {"bigquery": "BigQuery", "deprecated-compute": "Deprecated Compute"},
+            "by_id": {
+                "947D-3B46-7781": {"name": "Active Logical Storage", "groups": ["bigquery", "deprecated-compute"]},
+                "DDDD-0000-0001": {"name": "Deprecated Only SKU", "groups": ["deprecated-compute"]},
+            },
+        }
+        with patch("sku_scraper.cli.cache.load_cache", return_value=index), \
+             patch("sku_scraper.cli.cache.cache_age_seconds", return_value=3600.0):
+            result = runner.invoke(main, ["search", "--name", "storage", "--ignore-deprecated"])
+        assert result.exit_code == 0
+        assert "947D-3B46-7781" in result.output
+        assert "bigquery" in result.output
+        assert "deprecated-compute" not in result.output
+        assert "DDDD-0000-0001" not in result.output
+
+    def test_ignore_deprecated_shows_not_found_when_all_name_rows_filtered(self, runner):
+        index = {
+            "built_at": "2026-01-01T00:00:00+00:00",
+            "group_names": {"deprecated-compute": "Deprecated Compute"},
+            "by_id": {
+                "DDDD-0000-0001": {"name": "Deprecated Only SKU", "groups": ["deprecated-compute"]},
+            },
+        }
+        with patch("sku_scraper.cli.cache.load_cache", return_value=index), \
+             patch("sku_scraper.cli.cache.cache_age_seconds", return_value=3600.0):
+            result = runner.invoke(main, ["search", "--name", "deprecated only", "--ignore-deprecated"])
+        assert result.exit_code == 0
+        assert "No SKUs found" in result.output
+
     def test_rebuild_flag_ignores_existing_cache(self, runner):
         with patch("sku_scraper.cli.cache.load_cache", return_value=SAMPLE_INDEX) as mock_load, \
              patch("sku_scraper.cli.scraper._make_session", return_value=MagicMock()), \

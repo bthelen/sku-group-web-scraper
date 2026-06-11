@@ -141,7 +141,8 @@ def _group_sort_key(slug: str) -> tuple[int, str]:
 @click.option("--name", "sku_name", default=None, metavar="TEXT", help="Search by SKU name (case-insensitive substring).")
 @click.option("--rebuild", is_flag=True, help="Force rebuild the cache before searching.")
 @click.option("--workers", default=10, show_default=True, help="Parallel fetch workers (used when building cache).")
-def search(sku_id: str | None, sku_name: str | None, rebuild: bool, workers: int) -> None:
+@click.option("--ignore-deprecated", "ignore_deprecated", is_flag=True, help="Exclude deprecated SKU groups from results.")
+def search(sku_id: str | None, sku_name: str | None, rebuild: bool, workers: int, ignore_deprecated: bool) -> None:
     """Search for which SKU groups contain a given SKU ID or name.
 
     Examples:
@@ -197,6 +198,11 @@ def search(sku_id: str | None, sku_name: str | None, rebuild: bool, workers: int
             click.echo(f"No groups found for SKU ID {sku_id!r}.")
             return
         sorted_groups = sorted(entry["groups"], key=_group_sort_key)
+        if ignore_deprecated:
+            sorted_groups = [g for g in sorted_groups if "deprecat" not in g]
+        if not sorted_groups:
+            click.echo(f"No groups found for SKU ID {sku_id!r}.")
+            return
         color_map = _group_color_map(sorted_groups)
         click.echo(f"SKU ID : {sku_id}")
         click.echo(f"Name   : {entry['name']}")
@@ -226,9 +232,13 @@ def search(sku_id: str | None, sku_name: str | None, rebuild: bool, workers: int
                 (sid, entry["name"], g)
                 for sid, entry in matches
                 for g in entry["groups"]
+                if not ignore_deprecated or "deprecat" not in g
             ],
             key=lambda r: (_group_sort_key(r[2]), r[1], r[0]),
         )
+        if not rows:
+            click.echo(f"No SKUs found matching name {sku_name!r}.")
+            return
         color_map = _group_color_map({slug for _, _, slug in rows})
         id_w = max(len(r[0]) for r in rows)
         sku_name_w = max(len(r[1]) for r in rows)

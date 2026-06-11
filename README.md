@@ -124,6 +124,17 @@ To force a rebuild as part of a search in one step:
 sku-scraper search --name "storage" --rebuild
 ```
 
+### Filtering out deprecated groups
+
+Some SKU groups have slugs containing "deprecat" (e.g. `compute-engine-deprecatedskus`). By default these appear at the end of search results. To exclude them entirely:
+
+```bash
+sku-scraper search --id 947D-3B46-7781 --ignore-deprecated
+sku-scraper search --name "storage" --ignore-deprecated
+```
+
+If a SKU exists only in deprecated groups, `--ignore-deprecated` will report it as not found.
+
 ---
 
 ### Output file format
