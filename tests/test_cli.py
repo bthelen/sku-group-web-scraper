@@ -295,6 +295,25 @@ class TestSearchCommand:
         for line in result.output.splitlines():
             assert line.count("bigquery") <= 1, f"Slug duplicated on same line: {line!r}"
 
+    def test_search_by_name_deprecated_groups_sorted_last(self, runner):
+        index = {
+            "built_at": "2026-01-01T00:00:00+00:00",
+            "group_names": {"bigquery": "BigQuery", "deprecated-skus": "Deprecated SKUs"},
+            "by_id": {
+                # "Alpha SKU" sorts before "Beta SKU" alphabetically, but is only in a deprecated group
+                "AAAA-0000-0001": {"name": "Alpha SKU", "groups": ["deprecated-skus"]},
+                "BBBB-0000-0002": {"name": "Beta SKU", "groups": ["bigquery"]},
+            },
+        }
+        with patch("sku_scraper.cli.cache.load_cache", return_value=index), \
+             patch("sku_scraper.cli.cache.cache_age_seconds", return_value=3600.0):
+            result = runner.invoke(main, ["search", "--name", "sku"])
+        assert result.exit_code == 0
+        lines = result.output.splitlines()
+        beta_idx = next(i for i, l in enumerate(lines) if "BBBB-0000-0002" in l)
+        alpha_idx = next(i for i, l in enumerate(lines) if "AAAA-0000-0001" in l)
+        assert beta_idx < alpha_idx, "Non-deprecated group row should appear before deprecated group row"
+
     def test_rebuild_flag_ignores_existing_cache(self, runner):
         with patch("sku_scraper.cli.cache.load_cache", return_value=SAMPLE_INDEX) as mock_load, \
              patch("sku_scraper.cli.scraper._make_session", return_value=MagicMock()), \

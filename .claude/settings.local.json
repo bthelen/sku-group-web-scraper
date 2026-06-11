@@ -4,7 +4,8 @@
       "Bash(sku-scraper scrape *)",
       "Read(//tmp/sku-test/**)",
       "Bash(pip install *)",
-      "Bash(pytest *)"
+      "Bash(pytest *)",
+      "Bash(python *)"
     ]
   }
 }

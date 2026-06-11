@@ -220,11 +220,15 @@ def search(sku_id: str | None, sku_name: str | None, rebuild: bool, workers: int
             return
 
         # One row per (SKU, group) so name and slug each get their own column.
-        rows = [
-            (sid, entry["name"], g)
-            for sid, entry in matches
-            for g in sorted(entry["groups"], key=_group_sort_key)
-        ]
+        # Primary sort: deprecated groups last; secondary: SKU name, then ID.
+        rows = sorted(
+            [
+                (sid, entry["name"], g)
+                for sid, entry in matches
+                for g in entry["groups"]
+            ],
+            key=lambda r: (_group_sort_key(r[2]), r[1], r[0]),
+        )
         color_map = _group_color_map({slug for _, _, slug in rows})
         id_w = max(len(r[0]) for r in rows)
         sku_name_w = max(len(r[1]) for r in rows)
