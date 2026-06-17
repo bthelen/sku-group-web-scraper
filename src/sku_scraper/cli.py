@@ -42,7 +42,13 @@ def list_groups() -> None:
     type=click.Path(file_okay=False, writable=True, path_type=Path),
     help="Directory to write output files into.",
 )
-def scrape(groups: tuple[str, ...], scrape_all: bool, output_dir: Path) -> None:
+@click.option(
+    "--single-file",
+    "single_file",
+    is_flag=True,
+    help="Combine all scraped SKUs into combined-skus.txt and combined-where-clause.txt.",
+)
+def scrape(groups: tuple[str, ...], scrape_all: bool, output_dir: Path, single_file: bool) -> None:
     """Scrape one or more SKU groups and write output files.
 
     Pass GROUP slugs as arguments (e.g. 'bigquery cloud-storage'), or use
@@ -72,6 +78,8 @@ def scrape(groups: tuple[str, ...], scrape_all: bool, output_dir: Path) -> None:
             for slug in validated
         }
 
+    combined: dict[str, None] = {}  # ordered set for deduplication across groups
+
     for slug, url in slugs_to_urls.items():
         try:
             sku_ids = scraper.fetch_sku_ids(session, url)
@@ -79,11 +87,20 @@ def scrape(groups: tuple[str, ...], scrape_all: bool, output_dir: Path) -> None:
             click.echo(click.style(f"  ERROR  {slug}: {exc}", fg="red"), err=True)
             continue
 
-        skus_path = writer.write_skus_file(slug, sku_ids, output_dir)
-        where_path = writer.write_where_clause_file(slug, sku_ids, output_dir)
-        click.echo(
-            f"{slug}: {len(sku_ids)} SKUs → {skus_path.name}, {where_path.name}"
-        )
+        if single_file:
+            for sid in sku_ids:
+                combined[sid] = None
+            click.echo(f"{slug}: {len(sku_ids)} SKUs")
+        else:
+            skus_path = writer.write_skus_file(slug, sku_ids, output_dir)
+            where_path = writer.write_where_clause_file(slug, sku_ids, output_dir)
+            click.echo(f"{slug}: {len(sku_ids)} SKUs → {skus_path.name}, {where_path.name}")
+
+    if single_file:
+        all_ids = list(combined.keys())
+        skus_path = writer.write_skus_file("combined", all_ids, output_dir)
+        where_path = writer.write_where_clause_file("combined", all_ids, output_dir)
+        click.echo(f"Combined: {len(all_ids)} unique SKUs → {skus_path.name}, {where_path.name}")
 
 
 @main.command(name="build-cache")

@@ -149,6 +149,56 @@ class TestScrapeCommand:
         assert result.exit_code == 0
         assert new_dir.exists()
 
+    def test_single_file_writes_combined_files(self, runner, tmp_path):
+        with patch("sku_scraper.cli.scraper.fetch_sku_ids", return_value=SKU_IDS), \
+             patch("sku_scraper.cli.scraper._make_session", return_value=MagicMock()):
+            result = runner.invoke(
+                main,
+                ["scrape", "bigquery", "cloud-storage", "--single-file", "--output-dir", str(tmp_path)],
+            )
+        assert result.exit_code == 0
+        assert (tmp_path / "combined-skus.txt").exists()
+        assert (tmp_path / "combined-where-clause.txt").exists()
+        assert not (tmp_path / "bigquery-skus.txt").exists()
+        assert not (tmp_path / "cloud-storage-skus.txt").exists()
+
+    def test_single_file_deduplicates_sku_ids(self, runner, tmp_path):
+        # Both groups return the same SKU IDs — combined file should have no duplicates.
+        with patch("sku_scraper.cli.scraper.fetch_sku_ids", return_value=SKU_IDS), \
+             patch("sku_scraper.cli.scraper._make_session", return_value=MagicMock()):
+            runner.invoke(
+                main,
+                ["scrape", "bigquery", "cloud-storage", "--single-file", "--output-dir", str(tmp_path)],
+            )
+        lines = (tmp_path / "combined-skus.txt").read_text(encoding="utf-8").splitlines()
+        assert lines == list(dict.fromkeys(SKU_IDS))  # deduplicated, order preserved
+
+    def test_single_file_combines_unique_ids_from_multiple_groups(self, runner, tmp_path):
+        def side_effect(session, url):
+            if "bigquery" in url:
+                return ["AAAA-1111-0001", "BBBB-2222-0002"]
+            return ["BBBB-2222-0002", "CCCC-3333-0003"]  # BBBB shared
+
+        with patch("sku_scraper.cli.scraper.fetch_sku_ids", side_effect=side_effect), \
+             patch("sku_scraper.cli.scraper._make_session", return_value=MagicMock()):
+            runner.invoke(
+                main,
+                ["scrape", "bigquery", "cloud-storage", "--single-file", "--output-dir", str(tmp_path)],
+            )
+        lines = (tmp_path / "combined-skus.txt").read_text(encoding="utf-8").splitlines()
+        assert lines == ["AAAA-1111-0001", "BBBB-2222-0002", "CCCC-3333-0003"]
+
+    def test_single_file_with_all_flag(self, runner, tmp_path):
+        with patch("sku_scraper.cli.scraper.fetch_sku_groups", return_value=GROUPS), \
+             patch("sku_scraper.cli.scraper.fetch_sku_ids", return_value=SKU_IDS), \
+             patch("sku_scraper.cli.scraper._make_session", return_value=MagicMock()):
+            result = runner.invoke(
+                main, ["scrape", "--all", "--single-file", "--output-dir", str(tmp_path)]
+            )
+        assert result.exit_code == 0
+        assert (tmp_path / "combined-skus.txt").exists()
+        assert (tmp_path / "combined-where-clause.txt").exists()
+
 
 SAMPLE_INDEX = {
     "built_at": "2026-01-01T00:00:00+00:00",

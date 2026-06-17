@@ -60,6 +60,15 @@ sku-scraper scrape bigquery --output-dir ~/sku-exports
 
 The directory is created if it does not exist.
 
+### Combine all results into a single pair of files
+
+By default each group gets its own pair of output files. Use `--single-file` to merge all scraped groups into `combined-skus.txt` and `combined-where-clause.txt` instead. SKU IDs that appear in more than one group are deduplicated.
+
+```bash
+sku-scraper scrape bigquery cloud-storage --single-file
+sku-scraper scrape --all --single-file --output-dir ~/sku-exports
+```
+
 ---
 
 ## Searching for SKU groups by ID or name
