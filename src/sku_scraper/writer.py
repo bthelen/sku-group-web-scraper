@@ -11,13 +11,15 @@ def slug_to_filename(slug: str) -> str:
 def write_skus_file(slug: str, sku_ids: list[str], output_dir: Path) -> Path:
     filename = slug_to_filename(slug) + "-skus.txt"
     path = output_dir / filename
-    path.write_text("\n".join(sku_ids) + "\n", encoding="utf-8")
+    unique_ids = list(dict.fromkeys(sku_ids))
+    path.write_text("\n".join(unique_ids) + "\n", encoding="utf-8")
     return path
 
 
 def write_where_clause_file(slug: str, sku_ids: list[str], output_dir: Path) -> Path:
     filename = slug_to_filename(slug) + "-where-clause.txt"
     path = output_dir / filename
-    clause = ", ".join(f'"{sku_id}"' for sku_id in sku_ids)
+    unique_ids = list(dict.fromkeys(sku_ids))
+    clause = ", ".join(f'"{sku_id}"' for sku_id in unique_ids)
     path.write_text(clause + "\n", encoding="utf-8")
     return path

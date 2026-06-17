@@ -46,6 +46,12 @@ class TestWriteSkusFile:
         path = write_skus_file("cloud-storage", SKU_IDS, tmp_path)
         assert path.name == "cloud-storage-skus.txt"
 
+    def test_deduplicates_ids(self, tmp_path):
+        ids_with_dupes = ["947D-3B46-7781", "C493-D992-4C50", "947D-3B46-7781"]
+        path = write_skus_file("bigquery", ids_with_dupes, tmp_path)
+        lines = path.read_text(encoding="utf-8").splitlines()
+        assert lines == ["947D-3B46-7781", "C493-D992-4C50"]
+
 
 class TestWriteWhereClauseFile:
     def test_creates_file(self, tmp_path):
@@ -70,3 +76,9 @@ class TestWriteWhereClauseFile:
         path = write_where_clause_file("bigquery", [], tmp_path)
         content = path.read_text(encoding="utf-8").strip()
         assert content == ""
+
+    def test_deduplicates_ids(self, tmp_path):
+        ids_with_dupes = ["947D-3B46-7781", "C493-D992-4C50", "947D-3B46-7781"]
+        path = write_where_clause_file("bigquery", ids_with_dupes, tmp_path)
+        content = path.read_text(encoding="utf-8").strip()
+        assert content == '"947D-3B46-7781", "C493-D992-4C50"'
