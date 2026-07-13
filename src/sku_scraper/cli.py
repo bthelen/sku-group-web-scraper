@@ -3,6 +3,7 @@ from pathlib import Path
 
 import click
 import requests
+from click.shell_completion import BashComplete, ZshComplete
 
 from sku_scraper import cache, scraper, writer
 
@@ -278,3 +279,32 @@ def search(sku_id: str | None, sku_name: str | None, rebuild: bool, workers: int
             for sku_id_val, sku_name_val, slug in rows:
                 color = color_map[slug]
                 click.echo(f"{sku_id_val:<{id_w}}  {sku_name_val:<{sku_name_w}}  {click.style(slug, fg=color)}")
+
+
+_COMPLETION_CLASSES = {"bash": BashComplete, "zsh": ZshComplete}
+
+
+@main.command()
+@click.argument("shell", type=click.Choice(["bash", "zsh"], case_sensitive=False))
+def completion(shell: str) -> None:
+    """Print the shell completion script for SHELL (bash or zsh).
+
+    To enable completions, add one of the following to your shell startup file:
+
+    \b
+    # ~/.bashrc
+    eval "$(sku-scraper completion bash)"
+
+    \b
+    # ~/.zshrc
+    eval "$(sku-scraper completion zsh)"
+
+    Or save to a file and source it from there:
+
+    \b
+    sku-scraper completion bash > ~/.bash_completions/sku-scraper.bash
+    source ~/.bash_completions/sku-scraper.bash
+    """
+    complete_cls = _COMPLETION_CLASSES[shell.lower()]
+    complete = complete_cls(main, {}, "sku-scraper", "_SKU_SCRAPER_COMPLETE")
+    click.echo(complete.source(), nl=False)

@@ -13,6 +13,28 @@ GROUPS = {
 SKU_IDS = ["947D-3B46-7781", "C493-D992-4C50"]
 
 
+class TestCompletionCommand:
+    def test_bash_completion_exits_ok(self, runner):
+        result = runner.invoke(main, ["completion", "bash"])
+        assert result.exit_code == 0
+
+    def test_zsh_completion_exits_ok(self, runner):
+        result = runner.invoke(main, ["completion", "zsh"])
+        assert result.exit_code == 0
+
+    def test_bash_completion_contains_function(self, runner):
+        result = runner.invoke(main, ["completion", "bash"])
+        assert "_sku_scraper_completion" in result.output
+
+    def test_zsh_completion_contains_compdef(self, runner):
+        result = runner.invoke(main, ["completion", "zsh"])
+        assert "#compdef" in result.output
+
+    def test_invalid_shell_rejected(self, runner):
+        result = runner.invoke(main, ["completion", "fish"])
+        assert result.exit_code != 0
+
+
 class TestGroupSortKey:
     def test_non_deprecated_sorts_before_deprecated(self):
         groups = ["bigquery", "compute-engine-deprecated", "cloud-storage"]

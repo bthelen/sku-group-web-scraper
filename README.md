@@ -71,6 +71,28 @@ sku-scraper scrape --all --single-file --output-dir ~/sku-exports
 
 ---
 
+## Shell completion
+
+The `completion` command generates a tab-completion script for your shell. Add the appropriate line to your shell startup file and restart your shell (or source the file) to enable completion for all commands, subcommands, and flags.
+
+**bash** — add to `~/.bashrc`:
+```bash
+eval "$(sku-scraper completion bash)"
+```
+
+**zsh** — add to `~/.zshrc`:
+```zsh
+eval "$(sku-scraper completion zsh)"
+```
+
+Alternatively, save to a file and source it:
+```bash
+sku-scraper completion bash > ~/.bash_completions/sku-scraper.bash
+source ~/.bash_completions/sku-scraper.bash
+```
+
+---
+
 ## Searching for SKU groups by ID or name
 
 The `search` command lets you look up which SKU groups contain a given SKU ID or name. It works from a local cache so it doesn't need to re-fetch every group page each time you search.
