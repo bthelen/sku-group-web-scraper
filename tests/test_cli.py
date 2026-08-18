@@ -134,6 +134,109 @@ class TestDiffGroupListCommand:
             result = runner.invoke(main, ["diff-group-list"])
         assert "2026-01-01" in result.output
 
+    def test_deprecated_prefix_match_goes_to_scheduled_not_new_or_removed(self, runner):
+        # Cache has 'bigquery'; live has 'deprecated-bigquery'.
+        # This is a rename to deprecation, not a new+removed pair.
+        index = {
+            "built_at": "2026-01-01T00:00:00+00:00",
+            "group_names": {"bigquery": "BigQuery", "cloud-storage": "Cloud Storage"},
+            "by_id": {},
+        }
+        live = {
+            "cloud-storage": {"url": "https://cloud.google.com/skus/sku-groups/cloud-storage", "name": "Cloud Storage"},
+            "deprecated-bigquery": {"url": "https://cloud.google.com/skus/sku-groups/deprecated-bigquery", "name": "Deprecated BigQuery"},
+        }
+        with patch("sku_scraper.cli.cache.load_cache", return_value=index), \
+             patch("sku_scraper.cli.scraper.fetch_sku_groups", return_value=live), \
+             patch("sku_scraper.cli.scraper._make_session", return_value=MagicMock()):
+            result = runner.invoke(main, ["diff-group-list"])
+        assert result.exit_code == 0
+        assert "Scheduled for Deprecation" in result.output
+        assert "bigquery" in result.output
+        assert "deprecated-bigquery" in result.output
+        # bigquery must NOT appear in the new or removed sections
+        lines = result.output.splitlines()
+        new_section = [l for l in lines if l.strip().startswith("+")]
+        removed_section = [l for l in lines if l.strip().startswith("-")]
+        assert not any("bigquery" in l for l in new_section)
+        assert not any("bigquery" in l for l in removed_section)
+
+    def test_scheduled_shows_old_group_name(self, runner):
+        index = {
+            "built_at": "2026-01-01T00:00:00+00:00",
+            "group_names": {"bigquery": "BigQuery"},
+            "by_id": {},
+        }
+        live = {
+            "deprecated-bigquery": {"url": "https://cloud.google.com/skus/sku-groups/deprecated-bigquery", "name": "Deprecated BigQuery"},
+        }
+        with patch("sku_scraper.cli.cache.load_cache", return_value=index), \
+             patch("sku_scraper.cli.scraper.fetch_sku_groups", return_value=live), \
+             patch("sku_scraper.cli.scraper._make_session", return_value=MagicMock()):
+            result = runner.invoke(main, ["diff-group-list"])
+        scheduled_lines = [l for l in result.output.splitlines() if l.strip().startswith("~")]
+        assert len(scheduled_lines) == 1
+        assert "BigQuery" in scheduled_lines[0]
+        assert "bigquery" in scheduled_lines[0]
+        assert "deprecated-bigquery" in scheduled_lines[0]
+
+    def test_scheduled_section_appears_after_new_groups(self, runner):
+        index = {
+            "built_at": "2026-01-01T00:00:00+00:00",
+            "group_names": {"bigquery": "BigQuery"},
+            "by_id": {},
+        }
+        live = {
+            "deprecated-bigquery": {"url": "https://cloud.google.com/skus/sku-groups/deprecated-bigquery", "name": "Deprecated BigQuery"},
+            "vertex-ai": {"url": "https://cloud.google.com/skus/sku-groups/vertex-ai", "name": "Vertex AI"},
+        }
+        with patch("sku_scraper.cli.cache.load_cache", return_value=index), \
+             patch("sku_scraper.cli.scraper.fetch_sku_groups", return_value=live), \
+             patch("sku_scraper.cli.scraper._make_session", return_value=MagicMock()):
+            result = runner.invoke(main, ["diff-group-list"])
+        lines = result.output.splitlines()
+        new_header_idx = next(i for i, l in enumerate(lines) if "New groups" in l)
+        scheduled_header_idx = next(i for i, l in enumerate(lines) if "Scheduled for Deprecation" in l)
+        assert new_header_idx < scheduled_header_idx, "New groups section should appear before Scheduled for Deprecation"
+
+    def test_deprecate_prefix_variant_also_matches(self, runner):
+        # 'deprecate-bigquery' (no 'd' at end) should also match 'bigquery'.
+        index = {
+            "built_at": "2026-01-01T00:00:00+00:00",
+            "group_names": {"bigquery": "BigQuery"},
+            "by_id": {},
+        }
+        live = {
+            "deprecate-bigquery": {"url": "https://cloud.google.com/skus/sku-groups/deprecate-bigquery", "name": "Deprecate BigQuery"},
+        }
+        with patch("sku_scraper.cli.cache.load_cache", return_value=index), \
+             patch("sku_scraper.cli.scraper.fetch_sku_groups", return_value=live), \
+             patch("sku_scraper.cli.scraper._make_session", return_value=MagicMock()):
+            result = runner.invoke(main, ["diff-group-list"])
+        assert result.exit_code == 0
+        assert "Scheduled for Deprecation" in result.output
+
+    def test_unmatched_deprecated_prefix_still_reported_as_new(self, runner):
+        # 'deprecated-vertexai' appears in live but 'vertexai' is NOT in the cache;
+        # it should be treated as a plain new group, not scheduled for deprecation.
+        index = {
+            "built_at": "2026-01-01T00:00:00+00:00",
+            "group_names": {"bigquery": "BigQuery"},
+            "by_id": {},
+        }
+        live = {
+            "bigquery": {"url": "https://cloud.google.com/skus/sku-groups/bigquery", "name": "BigQuery"},
+            "deprecated-vertexai": {"url": "https://cloud.google.com/skus/sku-groups/deprecated-vertexai", "name": "Deprecated Vertex AI"},
+        }
+        with patch("sku_scraper.cli.cache.load_cache", return_value=index), \
+             patch("sku_scraper.cli.scraper.fetch_sku_groups", return_value=live), \
+             patch("sku_scraper.cli.scraper._make_session", return_value=MagicMock()):
+            result = runner.invoke(main, ["diff-group-list"])
+        assert result.exit_code == 0
+        lines = result.output.splitlines()
+        new_section = [l for l in lines if l.strip().startswith("+")]
+        assert any("deprecated-vertexai" in l for l in new_section)
+
 
 class TestGroupSortKey:
     def test_non_deprecated_sorts_before_deprecated(self):

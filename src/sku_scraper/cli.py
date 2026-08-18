@@ -281,12 +281,24 @@ def search(sku_id: str | None, sku_name: str | None, rebuild: bool, workers: int
                 click.echo(f"{sku_id_val:<{id_w}}  {sku_name_val:<{sku_name_w}}  {click.style(slug, fg=color)}")
 
 
+import re as _re
+
+_DEPRECATION_PREFIX_RE = _re.compile(r"^deprecat\w*-(.+)$")
+
+
+def _deprecation_base(slug: str) -> str | None:
+    """Return the base slug if slug has a deprecat*- prefix, else None."""
+    m = _DEPRECATION_PREFIX_RE.match(slug)
+    return m.group(1) if m else None
+
+
 @main.command(name="diff-group-list")
 def diff_group_list() -> None:
     """Compare cached SKU groups against the current live list.
 
-    Reports which groups have been added or removed since the cache was built.
-    Requires an existing local cache — run 'build-cache' first if you have none.
+    Reports which groups have been added, removed, or scheduled for deprecation
+    since the cache was built. Requires an existing local cache — run
+    'build-cache' first if you have none.
     """
     index = cache.load_cache()
     if index is None:
@@ -311,10 +323,25 @@ def diff_group_list() -> None:
     cached_slugs = set(cached_groups.keys())
     live_slugs = set(live_groups.keys())
 
-    new_slugs = sorted(live_slugs - cached_slugs)
-    removed_slugs = sorted(cached_slugs - live_slugs)
+    candidate_new = live_slugs - cached_slugs
+    candidate_removed = cached_slugs - live_slugs
 
-    if not new_slugs and not removed_slugs:
+    # Identify deprecation pairs: live slug has a deprecat*- prefix whose base
+    # matches a slug that disappeared from the cache.
+    scheduled: list[tuple[str, str]] = []  # (old_slug, new_deprecated_slug)
+    matched_new: set[str] = set()
+    matched_removed: set[str] = set()
+    for live_slug in sorted(candidate_new):
+        base = _deprecation_base(live_slug)
+        if base and base in candidate_removed:
+            scheduled.append((base, live_slug))
+            matched_new.add(live_slug)
+            matched_removed.add(base)
+
+    new_slugs = sorted(candidate_new - matched_new)
+    removed_slugs = sorted(candidate_removed - matched_removed)
+
+    if not new_slugs and not removed_slugs and not scheduled:
         click.echo("No changes detected.")
         return
 
@@ -324,6 +351,16 @@ def diff_group_list() -> None:
         for slug in new_slugs:
             name = live_groups[slug]["name"]
             click.echo(f"  {click.style('+', fg='green')} {name:<{name_w}}  {slug}")
+
+    if scheduled:
+        click.echo(click.style(f"\nScheduled for Deprecation ({len(scheduled)}):", fg="yellow"))
+        name_w = max(len(cached_groups[old]) for old, _ in scheduled)
+        old_w = max(len(old) for old, _ in scheduled)
+        for old_slug, new_slug in scheduled:
+            name = cached_groups[old_slug]
+            click.echo(
+                f"  {click.style('~', fg='yellow')} {name:<{name_w}}  {old_slug:<{old_w}}  →  {new_slug}"
+            )
 
     if removed_slugs:
         click.echo(click.style(f"\nRemoved groups ({len(removed_slugs)}):", fg="red"))

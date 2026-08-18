@@ -73,19 +73,28 @@ sku-scraper scrape --all --single-file --output-dir ~/sku-exports
 
 ## Diffing the live group list against your cache
 
-`diff-group-list` fetches the current SKU group index from Google Cloud and compares it against the groups recorded in your local cache, telling you which groups have been added or removed since the cache was built. It only compares group names — it does not re-fetch the SKUs inside each group.
+`diff-group-list` fetches the current SKU group index from Google Cloud and compares it against the groups recorded in your local cache. It only compares group names — it does not re-fetch the SKUs inside each group.
 
 ```bash
 sku-scraper diff-group-list
 ```
 
-Example output when changes are found:
+Three categories are reported:
+
+- **Scheduled for Deprecation** — a cached group slug now appears in the live list with a `deprecat*-` prefix prepended (e.g. `bigquery` → `deprecated-bigquery`). These are not counted as new or removed.
+- **New groups** — slugs present in the live list but not in the cache (and not a deprecation rename).
+- **Removed groups** — slugs present in the cache but no longer in the live list (and not renamed to a deprecation slug).
+
+Example output:
 
 ```
 Cache built: 2026-01-01T00:00:00+00:00
 
 New groups (1):
   + Vertex AI                vertex-ai
+
+Scheduled for Deprecation (1):
+  ~ BigQuery  bigquery  →  deprecated-bigquery
 
 Removed groups (1):
   - Old Compute Group        old-compute
