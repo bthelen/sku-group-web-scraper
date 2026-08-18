@@ -35,6 +35,106 @@ class TestCompletionCommand:
         assert result.exit_code != 0
 
 
+class TestDiffGroupListCommand:
+    def test_no_cache_reports_error(self, runner):
+        with patch("sku_scraper.cli.cache.load_cache", return_value=None):
+            result = runner.invoke(main, ["diff-group-list"])
+        assert result.exit_code != 0
+        assert "No local cache" in result.output
+
+    def test_cache_missing_group_names_reports_error(self, runner):
+        index = {"built_at": "2026-01-01T00:00:00+00:00", "by_id": {}}
+        with patch("sku_scraper.cli.cache.load_cache", return_value=index):
+            result = runner.invoke(main, ["diff-group-list"])
+        assert result.exit_code != 0
+        assert "build-cache" in result.output
+
+    def test_no_changes_detected(self, runner):
+        index = {
+            "built_at": "2026-01-01T00:00:00+00:00",
+            "group_names": {"bigquery": "BigQuery", "cloud-storage": "Cloud Storage"},
+            "by_id": {},
+        }
+        live = {
+            "bigquery": {"url": "https://cloud.google.com/skus/sku-groups/bigquery", "name": "BigQuery"},
+            "cloud-storage": {"url": "https://cloud.google.com/skus/sku-groups/cloud-storage", "name": "Cloud Storage"},
+        }
+        with patch("sku_scraper.cli.cache.load_cache", return_value=index), \
+             patch("sku_scraper.cli.scraper.fetch_sku_groups", return_value=live), \
+             patch("sku_scraper.cli.scraper._make_session", return_value=MagicMock()):
+            result = runner.invoke(main, ["diff-group-list"])
+        assert result.exit_code == 0
+        assert "No changes" in result.output
+
+    def test_reports_new_groups(self, runner):
+        index = {
+            "built_at": "2026-01-01T00:00:00+00:00",
+            "group_names": {"bigquery": "BigQuery"},
+            "by_id": {},
+        }
+        live = {
+            "bigquery": {"url": "https://cloud.google.com/skus/sku-groups/bigquery", "name": "BigQuery"},
+            "cloud-storage": {"url": "https://cloud.google.com/skus/sku-groups/cloud-storage", "name": "Cloud Storage"},
+        }
+        with patch("sku_scraper.cli.cache.load_cache", return_value=index), \
+             patch("sku_scraper.cli.scraper.fetch_sku_groups", return_value=live), \
+             patch("sku_scraper.cli.scraper._make_session", return_value=MagicMock()):
+            result = runner.invoke(main, ["diff-group-list"])
+        assert result.exit_code == 0
+        assert "cloud-storage" in result.output
+        assert "Cloud Storage" in result.output
+
+    def test_reports_removed_groups(self, runner):
+        index = {
+            "built_at": "2026-01-01T00:00:00+00:00",
+            "group_names": {"bigquery": "BigQuery", "cloud-storage": "Cloud Storage"},
+            "by_id": {},
+        }
+        live = {
+            "bigquery": {"url": "https://cloud.google.com/skus/sku-groups/bigquery", "name": "BigQuery"},
+        }
+        with patch("sku_scraper.cli.cache.load_cache", return_value=index), \
+             patch("sku_scraper.cli.scraper.fetch_sku_groups", return_value=live), \
+             patch("sku_scraper.cli.scraper._make_session", return_value=MagicMock()):
+            result = runner.invoke(main, ["diff-group-list"])
+        assert result.exit_code == 0
+        assert "cloud-storage" in result.output
+        assert "Cloud Storage" in result.output
+
+    def test_reports_both_new_and_removed(self, runner):
+        index = {
+            "built_at": "2026-01-01T00:00:00+00:00",
+            "group_names": {"bigquery": "BigQuery", "old-group": "Old Group"},
+            "by_id": {},
+        }
+        live = {
+            "bigquery": {"url": "https://cloud.google.com/skus/sku-groups/bigquery", "name": "BigQuery"},
+            "new-group": {"url": "https://cloud.google.com/skus/sku-groups/new-group", "name": "New Group"},
+        }
+        with patch("sku_scraper.cli.cache.load_cache", return_value=index), \
+             patch("sku_scraper.cli.scraper.fetch_sku_groups", return_value=live), \
+             patch("sku_scraper.cli.scraper._make_session", return_value=MagicMock()):
+            result = runner.invoke(main, ["diff-group-list"])
+        assert result.exit_code == 0
+        assert "new-group" in result.output
+        assert "New Group" in result.output
+        assert "old-group" in result.output
+        assert "Old Group" in result.output
+
+    def test_shows_cache_date(self, runner):
+        index = {
+            "built_at": "2026-01-01T00:00:00+00:00",
+            "group_names": {"bigquery": "BigQuery"},
+            "by_id": {},
+        }
+        live = {"bigquery": {"url": "https://cloud.google.com/skus/sku-groups/bigquery", "name": "BigQuery"}}
+        with patch("sku_scraper.cli.cache.load_cache", return_value=index), \
+             patch("sku_scraper.cli.scraper.fetch_sku_groups", return_value=live), \
+             patch("sku_scraper.cli.scraper._make_session", return_value=MagicMock()):
+            result = runner.invoke(main, ["diff-group-list"])
+        assert "2026-01-01" in result.output
+
+
 class TestGroupSortKey:
     def test_non_deprecated_sorts_before_deprecated(self):
         groups = ["bigquery", "compute-engine-deprecated", "cloud-storage"]

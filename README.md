@@ -71,6 +71,30 @@ sku-scraper scrape --all --single-file --output-dir ~/sku-exports
 
 ---
 
+## Diffing the live group list against your cache
+
+`diff-group-list` fetches the current SKU group index from Google Cloud and compares it against the groups recorded in your local cache, telling you which groups have been added or removed since the cache was built. It only compares group names — it does not re-fetch the SKUs inside each group.
+
+```bash
+sku-scraper diff-group-list
+```
+
+Example output when changes are found:
+
+```
+Cache built: 2026-01-01T00:00:00+00:00
+
+New groups (1):
+  + Vertex AI                vertex-ai
+
+Removed groups (1):
+  - Old Compute Group        old-compute
+```
+
+If there is no local cache the command will exit with an error. Build one first with `build-cache`.
+
+---
+
 ## Shell completion
 
 The `completion` command generates a tab-completion script for your shell. Add the appropriate line to your shell startup file and restart your shell (or source the file) to enable completion for all commands, subcommands, and flags.

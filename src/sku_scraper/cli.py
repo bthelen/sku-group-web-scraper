@@ -281,6 +281,58 @@ def search(sku_id: str | None, sku_name: str | None, rebuild: bool, workers: int
                 click.echo(f"{sku_id_val:<{id_w}}  {sku_name_val:<{sku_name_w}}  {click.style(slug, fg=color)}")
 
 
+@main.command(name="diff-group-list")
+def diff_group_list() -> None:
+    """Compare cached SKU groups against the current live list.
+
+    Reports which groups have been added or removed since the cache was built.
+    Requires an existing local cache — run 'build-cache' first if you have none.
+    """
+    index = cache.load_cache()
+    if index is None:
+        raise click.ClickException(
+            "No local cache found. Run 'build-cache' first."
+        )
+    if "group_names" not in index:
+        raise click.ClickException(
+            "Cache is missing group names. Run 'build-cache --force' to rebuild."
+        )
+
+    cached_groups: dict[str, str] = index["group_names"]
+    built_at = index.get("built_at", "unknown")
+    click.echo(f"Cache built: {built_at}")
+
+    session = scraper._make_session()
+    try:
+        live_groups = scraper.fetch_sku_groups(session)
+    except requests.RequestException as exc:
+        raise click.ClickException(f"Failed to fetch SKU group index: {exc}") from exc
+
+    cached_slugs = set(cached_groups.keys())
+    live_slugs = set(live_groups.keys())
+
+    new_slugs = sorted(live_slugs - cached_slugs)
+    removed_slugs = sorted(cached_slugs - live_slugs)
+
+    if not new_slugs and not removed_slugs:
+        click.echo("No changes detected.")
+        return
+
+    if new_slugs:
+        click.echo(click.style(f"\nNew groups ({len(new_slugs)}):", fg="green"))
+        name_w = max(len(live_groups[s]["name"]) for s in new_slugs)
+        for slug in new_slugs:
+            name = live_groups[slug]["name"]
+            click.echo(f"  {click.style('+', fg='green')} {name:<{name_w}}  {slug}")
+
+    if removed_slugs:
+        click.echo(click.style(f"\nRemoved groups ({len(removed_slugs)}):", fg="red"))
+        name_w = max(len(cached_groups[s]) for s in removed_slugs)
+        for slug in removed_slugs:
+            name = cached_groups[slug]
+            click.echo(f"  {click.style('-', fg='red')} {name:<{name_w}}  {slug}")
+
+
 _COMPLETION_CLASSES = {"bash": BashComplete, "zsh": ZshComplete}
 
 
