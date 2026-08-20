@@ -277,3 +277,9 @@ pytest --cov=sku_scraper --cov-report=term-missing
 pip install --upgrade click requests beautifulsoup4 lxml platformdirs tqdm
 pip install --upgrade pytest pytest-cov responses
 ```
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE).

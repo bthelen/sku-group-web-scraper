@@ -6,6 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "sku-scraper"
 version = "0.1.0"
 description = "CLI tool to scrape Google Cloud SKU Group pages"
+license = {text = "MIT"}
 requires-python = ">=3.11"
 dependencies = [
     "click>=8.1",
