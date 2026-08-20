@@ -8,6 +8,7 @@ For any SKU group listed at [cloud.google.com/skus/sku-groups](https://cloud.goo
 
 - **Scrape** a group and export its SKU IDs as text files ready for use in SQL queries
 - **Search** across all groups by SKU ID or SKU name to find which groups contain a given SKU
+- **Diff** the list of SKU Groups in your local cache against the online data source to identify newly added, newly deprecated, or removed SKU Groups.  This diff should be run prior to updating the local cache.
 
 Scrape output files:
 
@@ -85,7 +86,7 @@ C493-D992-4C50
 
 **`bigquery-where-clause.txt`**
 
-This file creates a string which can be pasted in a where clause for manual queries of usage tables.
+This file creates a string which can be pasted in a where clause for manual queries of usage or billing tables.
 
 ```
 "947D-3B46-7781", "0752-7FDA-AF5E", "C493-D992-4C50", ...
@@ -174,8 +175,8 @@ sku-scraper diff-group-list
 
 Three categories are reported:
 
-- **Scheduled for Deprecation** — a cached group slug now appears in the live list with a `deprecat*-` prefix prepended (e.g. `bigquery` → `deprecated-bigquery`). These are not counted as new or removed.
 - **New groups** — slugs present in the live list but not in the cache (and not a deprecation rename).
+- **Scheduled for Deprecation** — a cached group slug now appears in the live list with a `deprecat*-` prefix prepended (e.g. `bigquery` → `deprecated-bigquery`). These are not counted as new or removed.
 - **Removed groups** — slugs present in the cache but no longer in the live list (and not renamed to a deprecation slug).
 
 Example output:
