@@ -24,7 +24,9 @@ pip install -e .
 
 ## Usage
 
-### List all available SKU groups
+### Scraping Commands
+
+#### List all available SKU groups
 
 ```bash
 sku-scraper list
@@ -32,7 +34,7 @@ sku-scraper list
 
 Prints every group slug and its URL. Use the slug as the argument to `scrape`.
 
-### Scrape one group
+#### Scrape one group
 
 ```bash
 sku-scraper scrape bigquery
@@ -40,19 +42,19 @@ sku-scraper scrape bigquery
 
 Writes `bigquery-skus.txt` and `bigquery-where-clause.txt` in the current directory.
 
-### Scrape multiple groups
+#### Scrape multiple groups
 
 ```bash
 sku-scraper scrape bigquery cloud-storage compute-engine
 ```
 
-### Scrape all groups
+#### Scrape all groups
 
 ```bash
 sku-scraper scrape --all
 ```
 
-### Write files to a specific directory
+#### Write files to a specific directory
 
 ```bash
 sku-scraper scrape bigquery --output-dir ~/sku-exports
@@ -60,7 +62,7 @@ sku-scraper scrape bigquery --output-dir ~/sku-exports
 
 The directory is created if it does not exist.
 
-### Combine all results into a single pair of files
+#### Combine all results into a single pair of files
 
 By default each group gets its own pair of output files. Use `--single-file` to merge all scraped groups into `combined-skus.txt` and `combined-where-clause.txt` instead. SKU IDs that appear in more than one group are deduplicated.
 
@@ -69,9 +71,100 @@ sku-scraper scrape bigquery cloud-storage --single-file
 sku-scraper scrape --all --single-file --output-dir ~/sku-exports
 ```
 
----
+#### Scrape Operations output file format
 
-## Diffing the live group list against your cache
+This file is a human or machine readable list which can be pasted into dashboard tools like those created by Looker to zoom in on the SKU Group.
+
+**`bigquery-skus.txt`**
+```
+947D-3B46-7781
+0752-7FDA-AF5E
+C493-D992-4C50
+...
+```
+
+**`bigquery-where-clause.txt`**
+
+This file creates a string which can be pasted in a where clause for manual queries of usage tables.
+
+```
+"947D-3B46-7781", "0752-7FDA-AF5E", "C493-D992-4C50", ...
+```
+
+### Searching for SKU groups by ID or name
+
+The `search` command lets you look up which SKU groups contain a given SKU ID or name. It works from a local cache so it doesn't need to re-fetch every group page each time you search.
+
+#### Search by exact SKU ID
+
+```bash
+sku-scraper search --id 947D-3B46-7781
+```
+
+Example output:
+```
+SKU ID : 947D-3B46-7781
+Name   : Active Logical Storage
+Groups : bigquery, cloud-storage
+```
+
+#### Search by SKU name
+
+Matches any SKU whose name contains the search text (case-insensitive).
+
+```bash
+sku-scraper search --name "active logical storage"
+```
+
+Example output:
+```
+SKU ID          SKU NAME                              GROUPS
+----------------------------------------------------------------------
+947D-3B46-7781  Active Logical Storage                bigquery, cloud-storage
+C493-D992-4C50  Active Logical Storage (asia-east1)   bigquery
+...
+```
+
+#### How the cache works
+
+The first time you run `search`, the tool automatically fetches all SKU group pages in parallel and saves an index to your OS cache directory (`~/Library/Caches/sku-scraper/index.json` on macOS). Subsequent searches are instant.
+
+The cache is flagged as stale after 7 days. To rebuild it manually:
+
+```bash
+sku-scraper build-cache
+```
+
+To force a rebuild even if the cache is fresh:
+
+```bash
+sku-scraper build-cache --force
+```
+
+To control how many pages are fetched in parallel (default: 10):
+
+```bash
+sku-scraper build-cache --workers 20
+```
+
+To force a rebuild as part of a search in one step:
+
+```bash
+sku-scraper search --name "storage" --rebuild
+```
+
+#### Filtering out deprecated groups
+
+Some SKU groups have slugs containing "deprecat" (e.g. `compute-engine-deprecatedskus`). By default these appear at the end of search results. To exclude them entirely:
+
+```bash
+sku-scraper search --id 947D-3B46-7781 --ignore-deprecated
+sku-scraper search --name "storage" --ignore-deprecated
+```
+
+If a SKU exists only in deprecated groups, `--ignore-deprecated` will report it as not found.
+
+### Diffing the live group list against your cache
 
 `diff-group-list` fetches the current SKU group index from Google Cloud and compares it against the groups recorded in your local cache. It only compares group names — it does not re-fetch the SKUs inside each group.
 
@@ -102,8 +195,6 @@ Removed groups (1):
 
 If there is no local cache the command will exit with an error. Build one first with `build-cache`.
 
----
-
 ## Shell completion
 
 The `completion` command generates a tab-completion script for your shell. Add the appropriate line to your shell startup file and restart your shell (or source the file) to enable completion for all commands, subcommands, and flags.
@@ -122,98 +213,6 @@ Alternatively, save to a file and source it:
 ```bash
 sku-scraper completion bash > ~/.bash_completions/sku-scraper.bash
 source ~/.bash_completions/sku-scraper.bash
-```
-
----
-
-## Searching for SKU groups by ID or name
-
-The `search` command lets you look up which SKU groups contain a given SKU ID or name. It works from a local cache so it doesn't need to re-fetch every group page each time you search.
-
-### Search by exact SKU ID
-
-```bash
-sku-scraper search --id 947D-3B46-7781
-```
-
-Example output:
-```
-SKU ID : 947D-3B46-7781
-Name   : Active Logical Storage
-Groups : bigquery, cloud-storage
-```
-
-### Search by SKU name
-
-Matches any SKU whose name contains the search text (case-insensitive).
-
-```bash
-sku-scraper search --name "active logical storage"
-```
-
-Example output:
-```
-SKU ID          SKU NAME                              GROUPS
-----------------------------------------------------------------------
-947D-3B46-7781  Active Logical Storage                bigquery, cloud-storage
-C493-D992-4C50  Active Logical Storage (asia-east1)   bigquery
-...
-```
-
-### How the cache works
-
-The first time you run `search`, the tool automatically fetches all SKU group pages in parallel and saves an index to your OS cache directory (`~/Library/Caches/sku-scraper/index.json` on macOS). Subsequent searches are instant.
-
-The cache is flagged as stale after 7 days. To rebuild it manually:
-
-```bash
-sku-scraper build-cache
-```
-
-To force a rebuild even if the cache is fresh:
-
-```bash
-sku-scraper build-cache --force
-```
-
-To control how many pages are fetched in parallel (default: 10):
-
-```bash
-sku-scraper build-cache --workers 20
-```
-
-To force a rebuild as part of a search in one step:
-
-```bash
-sku-scraper search --name "storage" --rebuild
-```
-
-### Filtering out deprecated groups
-
-Some SKU groups have slugs containing "deprecat" (e.g. `compute-engine-deprecatedskus`). By default these appear at the end of search results. To exclude them entirely:
-
-```bash
-sku-scraper search --id 947D-3B46-7781 --ignore-deprecated
-sku-scraper search --name "storage" --ignore-deprecated
-```
-
-If a SKU exists only in deprecated groups, `--ignore-deprecated` will report it as not found.
-
----
-
-### Output file format
-
-**`bigquery-skus.txt`**
-```
-947D-3B46-7781
-0752-7FDA-AF5E
-C493-D992-4C50
-...
-```
-
-**`bigquery-where-clause.txt`**
-```
-"947D-3B46-7781", "0752-7FDA-AF5E", "C493-D992-4C50", ...
 ```
 
 ---
