@@ -1,3 +1,4 @@
+import json
 import sys
 from pathlib import Path
 
@@ -160,7 +161,8 @@ def _group_sort_key(slug: str) -> tuple[int, str]:
 @click.option("--rebuild", is_flag=True, help="Force rebuild the cache before searching.")
 @click.option("--workers", default=10, show_default=True, help="Parallel fetch workers (used when building cache).")
 @click.option("--ignore-deprecated", "ignore_deprecated", is_flag=True, help="Exclude deprecated SKU groups from results.")
-def search(sku_id: str | None, sku_name: str | None, rebuild: bool, workers: int, ignore_deprecated: bool) -> None:
+@click.option("--json", "output_json", is_flag=True, help="Output results as JSON instead of formatted text.")
+def search(sku_id: str | None, sku_name: str | None, rebuild: bool, workers: int, ignore_deprecated: bool, output_json: bool) -> None:
     """Search for which SKU groups contain a given SKU ID or name.
 
     Examples:
@@ -200,7 +202,8 @@ def search(sku_id: str | None, sku_name: str | None, rebuild: bool, workers: int
             )
 
     built_at = index.get("built_at", "unknown")
-    click.echo(f"Cache built: {built_at}", err=True)
+    if not output_json:
+        click.echo(f"Cache built: {built_at}", err=True)
 
     group_names: dict[str, str] = index.get("group_names", {})
     if not group_names and "group_names" not in index:
@@ -213,13 +216,27 @@ def search(sku_id: str | None, sku_name: str | None, rebuild: bool, workers: int
     if sku_id:
         entry = by_id.get(sku_id)
         if entry is None:
+            if output_json:
+                raise click.ClickException(f"SKU ID {sku_id!r} not found.")
             click.echo(f"No groups found for SKU ID {sku_id!r}.")
             return
         sorted_groups = sorted(entry["groups"], key=_group_sort_key)
         if ignore_deprecated:
             sorted_groups = [g for g in sorted_groups if "deprecat" not in g]
         if not sorted_groups:
+            if output_json:
+                raise click.ClickException(f"SKU ID {sku_id!r} not found.")
             click.echo(f"No groups found for SKU ID {sku_id!r}.")
+            return
+        if output_json:
+            result = {
+                "sku_id": sku_id,
+                "name": entry["name"],
+                "groups": [
+                    {"slug": g, "name": group_names.get(g, g)} for g in sorted_groups
+                ],
+            }
+            click.echo(json.dumps(result, indent=2))
             return
         color_map = _group_color_map(sorted_groups)
         click.echo(f"SKU ID : {sku_id}")
@@ -240,6 +257,8 @@ def search(sku_id: str | None, sku_name: str | None, rebuild: bool, workers: int
             key=lambda x: (x[1]["name"], x[0]),
         )
         if not matches:
+            if output_json:
+                raise click.ClickException(f"No SKUs found matching name {sku_name!r}.")
             click.echo(f"No SKUs found matching name {sku_name!r}.")
             return
 
@@ -255,7 +274,17 @@ def search(sku_id: str | None, sku_name: str | None, rebuild: bool, workers: int
             key=lambda r: (_group_sort_key(r[2]), r[1], r[0]),
         )
         if not rows:
+            if output_json:
+                raise click.ClickException(f"No SKUs found matching name {sku_name!r}.")
             click.echo(f"No SKUs found matching name {sku_name!r}.")
+            return
+        if output_json:
+            sku_map: dict = {}
+            for sid, sname, slug in rows:
+                if sid not in sku_map:
+                    sku_map[sid] = {"sku_id": sid, "name": sname, "groups": []}
+                sku_map[sid]["groups"].append({"slug": slug, "name": group_names.get(slug, slug)})
+            click.echo(json.dumps(list(sku_map.values()), indent=2))
             return
         color_map = _group_color_map({slug for _, _, slug in rows})
         id_w = max(len(r[0]) for r in rows)

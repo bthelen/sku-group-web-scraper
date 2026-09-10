@@ -650,6 +650,71 @@ class TestSearchCommand:
         assert result.exit_code == 0
         assert "No SKUs found" in result.output
 
+    def test_json_by_id_found(self, runner):
+        import json
+        with patch("sku_scraper.cli.cache.load_cache", return_value=SAMPLE_INDEX), \
+             patch("sku_scraper.cli.cache.cache_age_seconds", return_value=3600.0):
+            result = runner.invoke(main, ["search", "--id", "947D-3B46-7781", "--json"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["sku_id"] == "947D-3B46-7781"
+        assert data["name"] == "Active Logical Storage"
+        slugs = [g["slug"] for g in data["groups"]]
+        assert "bigquery" in slugs
+        assert "cloud-storage" in slugs
+
+    def test_json_by_id_includes_group_names(self, runner):
+        import json
+        with patch("sku_scraper.cli.cache.load_cache", return_value=SAMPLE_INDEX), \
+             patch("sku_scraper.cli.cache.cache_age_seconds", return_value=3600.0):
+            result = runner.invoke(main, ["search", "--id", "947D-3B46-7781", "--json"])
+        data = json.loads(result.output)
+        names = {g["slug"]: g["name"] for g in data["groups"]}
+        assert names["bigquery"] == "BigQuery"
+        assert names["cloud-storage"] == "Cloud Storage"
+
+    def test_json_by_id_not_found_exits_nonzero(self, runner):
+        with patch("sku_scraper.cli.cache.load_cache", return_value=SAMPLE_INDEX), \
+             patch("sku_scraper.cli.cache.cache_age_seconds", return_value=3600.0):
+            result = runner.invoke(main, ["search", "--id", "ZZZZ-9999-ZZZZ", "--json"])
+        assert result.exit_code != 0
+
+    def test_json_by_name_found(self, runner):
+        import json
+        with patch("sku_scraper.cli.cache.load_cache", return_value=SAMPLE_INDEX), \
+             patch("sku_scraper.cli.cache.cache_age_seconds", return_value=3600.0):
+            result = runner.invoke(main, ["search", "--name", "active logical", "--json"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert isinstance(data, list)
+        ids = [item["sku_id"] for item in data]
+        assert "947D-3B46-7781" in ids
+        assert "C493-D992-4C50" in ids
+
+    def test_json_by_name_groups_per_sku(self, runner):
+        import json
+        with patch("sku_scraper.cli.cache.load_cache", return_value=SAMPLE_INDEX), \
+             patch("sku_scraper.cli.cache.cache_age_seconds", return_value=3600.0):
+            result = runner.invoke(main, ["search", "--name", "active logical", "--json"])
+        data = json.loads(result.output)
+        item = next(d for d in data if d["sku_id"] == "947D-3B46-7781")
+        slugs = [g["slug"] for g in item["groups"]]
+        assert "bigquery" in slugs
+        assert "cloud-storage" in slugs
+
+    def test_json_by_name_not_found_exits_nonzero(self, runner):
+        with patch("sku_scraper.cli.cache.load_cache", return_value=SAMPLE_INDEX), \
+             patch("sku_scraper.cli.cache.cache_age_seconds", return_value=3600.0):
+            result = runner.invoke(main, ["search", "--name", "nonexistent sku name", "--json"])
+        assert result.exit_code != 0
+
+    def test_json_output_is_valid_json(self, runner):
+        import json
+        with patch("sku_scraper.cli.cache.load_cache", return_value=SAMPLE_INDEX), \
+             patch("sku_scraper.cli.cache.cache_age_seconds", return_value=3600.0):
+            result = runner.invoke(main, ["search", "--id", "947D-3B46-7781", "--json"])
+        json.loads(result.output)  # raises if invalid
+
     def test_rebuild_flag_ignores_existing_cache(self, runner):
         with patch("sku_scraper.cli.cache.load_cache", return_value=SAMPLE_INDEX) as mock_load, \
              patch("sku_scraper.cli.scraper._make_session", return_value=MagicMock()), \
