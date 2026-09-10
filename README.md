@@ -196,6 +196,12 @@ Removed groups (1):
 
 If there is no local cache the command will exit with an error. Build one first with `build-cache`.
 
+## Using as an AI agent skill
+
+The `skills/gcp-sku-groups.md` file is a portable skill definition that teaches an AI agent how to answer natural language questions using this CLI — questions like *"What SKU groups is 8ADF-0E5E-853F in?"* or *"Have any groups been added since my last cache build?"*
+
+Install the CLI first (`pip install -e .`), then load the skill into your agent harness of choice. Every command that returns data supports `--json` for machine-readable output.
+
 ## Shell completion
 
 The `completion` command generates a tab-completion script for your shell. Add the appropriate line to your shell startup file and restart your shell (or source the file) to enable completion for all commands, subcommands, and flags.
