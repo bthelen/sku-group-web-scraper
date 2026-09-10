@@ -1,3 +1,8 @@
+---
+name: gcp-sku-groups
+description: Answer questions about Google Cloud SKU Groups — look up which groups contain a SKU by ID or name, list all available groups, export SKU ID lists to files, and detect changes in the live group list since the last cache build.
+---
+
 # gcp-sku-groups
 
 A skill for answering questions about Google Cloud SKU Groups using the `sku-scraper` CLI.
