@@ -15,13 +15,22 @@ def main() -> None:
 
 
 @main.command(name="list")
-def list_groups() -> None:
+@click.option("--json", "output_json", is_flag=True, help="Output results as JSON instead of formatted text.")
+def list_groups(output_json: bool) -> None:
     """List all available SKU group names and their slugs."""
     session = scraper._make_session()
     try:
         groups = scraper.fetch_sku_groups(session)
     except requests.RequestException as exc:
         raise click.ClickException(f"Failed to fetch SKU group index: {exc}") from exc
+
+    if output_json:
+        data = [
+            {"slug": slug, "name": info["name"], "url": info["url"]}
+            for slug, info in sorted(groups.items())
+        ]
+        click.echo(json.dumps(data, indent=2))
+        return
 
     if not groups:
         click.echo("No SKU groups found.")
@@ -322,7 +331,8 @@ def _deprecation_base(slug: str) -> str | None:
 
 
 @main.command(name="diff-group-list")
-def diff_group_list() -> None:
+@click.option("--json", "output_json", is_flag=True, help="Output results as JSON instead of formatted text.")
+def diff_group_list(output_json: bool) -> None:
     """Compare cached SKU groups against the current live list.
 
     Reports which groups have been added, removed, or scheduled for deprecation
@@ -341,7 +351,8 @@ def diff_group_list() -> None:
 
     cached_groups: dict[str, str] = index["group_names"]
     built_at = index.get("built_at", "unknown")
-    click.echo(f"Cache built: {built_at}")
+    if not output_json:
+        click.echo(f"Cache built: {built_at}")
 
     session = scraper._make_session()
     try:
@@ -369,6 +380,22 @@ def diff_group_list() -> None:
 
     new_slugs = sorted(candidate_new - matched_new)
     removed_slugs = sorted(candidate_removed - matched_removed)
+
+    if output_json:
+        click.echo(json.dumps({
+            "cache_built_at": built_at,
+            "new": [
+                {"slug": s, "name": live_groups[s]["name"]} for s in new_slugs
+            ],
+            "scheduled_for_deprecation": [
+                {"old_slug": old, "new_slug": new, "name": cached_groups[old]}
+                for old, new in scheduled
+            ],
+            "removed": [
+                {"slug": s, "name": cached_groups[s]} for s in removed_slugs
+            ],
+        }, indent=2))
+        return
 
     if not new_slugs and not removed_slugs and not scheduled:
         click.echo("No changes detected.")

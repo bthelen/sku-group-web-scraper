@@ -216,6 +216,116 @@ class TestDiffGroupListCommand:
         assert result.exit_code == 0
         assert "Scheduled for Deprecation" in result.output
 
+    def test_json_outputs_valid_json(self, runner):
+        import json
+        index = {
+            "built_at": "2026-01-01T00:00:00+00:00",
+            "group_names": {"bigquery": "BigQuery"},
+            "by_id": {},
+        }
+        live = {
+            "bigquery": {"url": "https://cloud.google.com/skus/sku-groups/bigquery", "name": "BigQuery"},
+            "vertex-ai": {"url": "https://cloud.google.com/skus/sku-groups/vertex-ai", "name": "Vertex AI"},
+        }
+        with patch("sku_scraper.cli.cache.load_cache", return_value=index), \
+             patch("sku_scraper.cli.scraper.fetch_sku_groups", return_value=live), \
+             patch("sku_scraper.cli.scraper._make_session", return_value=MagicMock()):
+            result = runner.invoke(main, ["diff-group-list", "--json"])
+        assert result.exit_code == 0
+        json.loads(result.output)
+
+    def test_json_structure_has_expected_keys(self, runner):
+        import json
+        index = {
+            "built_at": "2026-01-01T00:00:00+00:00",
+            "group_names": {"bigquery": "BigQuery"},
+            "by_id": {},
+        }
+        live = {"bigquery": {"url": "https://cloud.google.com/skus/sku-groups/bigquery", "name": "BigQuery"}}
+        with patch("sku_scraper.cli.cache.load_cache", return_value=index), \
+             patch("sku_scraper.cli.scraper.fetch_sku_groups", return_value=live), \
+             patch("sku_scraper.cli.scraper._make_session", return_value=MagicMock()):
+            result = runner.invoke(main, ["diff-group-list", "--json"])
+        data = json.loads(result.output)
+        assert "cache_built_at" in data
+        assert "new" in data
+        assert "scheduled_for_deprecation" in data
+        assert "removed" in data
+
+    def test_json_no_changes_returns_empty_lists(self, runner):
+        import json
+        index = {
+            "built_at": "2026-01-01T00:00:00+00:00",
+            "group_names": {"bigquery": "BigQuery"},
+            "by_id": {},
+        }
+        live = {"bigquery": {"url": "https://cloud.google.com/skus/sku-groups/bigquery", "name": "BigQuery"}}
+        with patch("sku_scraper.cli.cache.load_cache", return_value=index), \
+             patch("sku_scraper.cli.scraper.fetch_sku_groups", return_value=live), \
+             patch("sku_scraper.cli.scraper._make_session", return_value=MagicMock()):
+            result = runner.invoke(main, ["diff-group-list", "--json"])
+        data = json.loads(result.output)
+        assert data["new"] == []
+        assert data["scheduled_for_deprecation"] == []
+        assert data["removed"] == []
+
+    def test_json_new_groups_listed(self, runner):
+        import json
+        index = {
+            "built_at": "2026-01-01T00:00:00+00:00",
+            "group_names": {"bigquery": "BigQuery"},
+            "by_id": {},
+        }
+        live = {
+            "bigquery": {"url": "https://cloud.google.com/skus/sku-groups/bigquery", "name": "BigQuery"},
+            "vertex-ai": {"url": "https://cloud.google.com/skus/sku-groups/vertex-ai", "name": "Vertex AI"},
+        }
+        with patch("sku_scraper.cli.cache.load_cache", return_value=index), \
+             patch("sku_scraper.cli.scraper.fetch_sku_groups", return_value=live), \
+             patch("sku_scraper.cli.scraper._make_session", return_value=MagicMock()):
+            result = runner.invoke(main, ["diff-group-list", "--json"])
+        data = json.loads(result.output)
+        slugs = [g["slug"] for g in data["new"]]
+        assert "vertex-ai" in slugs
+        assert "bigquery" not in slugs
+
+    def test_json_removed_groups_listed(self, runner):
+        import json
+        index = {
+            "built_at": "2026-01-01T00:00:00+00:00",
+            "group_names": {"bigquery": "BigQuery", "old-group": "Old Group"},
+            "by_id": {},
+        }
+        live = {"bigquery": {"url": "https://cloud.google.com/skus/sku-groups/bigquery", "name": "BigQuery"}}
+        with patch("sku_scraper.cli.cache.load_cache", return_value=index), \
+             patch("sku_scraper.cli.scraper.fetch_sku_groups", return_value=live), \
+             patch("sku_scraper.cli.scraper._make_session", return_value=MagicMock()):
+            result = runner.invoke(main, ["diff-group-list", "--json"])
+        data = json.loads(result.output)
+        slugs = [g["slug"] for g in data["removed"]]
+        assert "old-group" in slugs
+
+    def test_json_scheduled_for_deprecation_listed(self, runner):
+        import json
+        index = {
+            "built_at": "2026-01-01T00:00:00+00:00",
+            "group_names": {"bigquery": "BigQuery"},
+            "by_id": {},
+        }
+        live = {
+            "deprecated-bigquery": {"url": "https://cloud.google.com/skus/sku-groups/deprecated-bigquery", "name": "Deprecated BigQuery"},
+        }
+        with patch("sku_scraper.cli.cache.load_cache", return_value=index), \
+             patch("sku_scraper.cli.scraper.fetch_sku_groups", return_value=live), \
+             patch("sku_scraper.cli.scraper._make_session", return_value=MagicMock()):
+            result = runner.invoke(main, ["diff-group-list", "--json"])
+        data = json.loads(result.output)
+        assert len(data["scheduled_for_deprecation"]) == 1
+        entry = data["scheduled_for_deprecation"][0]
+        assert entry["old_slug"] == "bigquery"
+        assert entry["new_slug"] == "deprecated-bigquery"
+        assert entry["name"] == "BigQuery"
+
     def test_unmatched_deprecated_prefix_still_reported_as_new(self, runner):
         # 'deprecated-vertexai' appears in live but 'vertexai' is NOT in the cache;
         # it should be treated as a plain new group, not scheduled for deprecation.
@@ -289,6 +399,34 @@ class TestListCommand:
             result = runner.invoke(main, ["list"])
         assert result.exit_code != 0
         assert "Failed to fetch" in result.output
+
+    def test_json_outputs_valid_json(self, runner):
+        import json
+        with patch("sku_scraper.cli.scraper.fetch_sku_groups", return_value=GROUPS), \
+             patch("sku_scraper.cli.scraper._make_session", return_value=MagicMock()):
+            result = runner.invoke(main, ["list", "--json"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert isinstance(data, list)
+
+    def test_json_contains_slug_name_url(self, runner):
+        import json
+        with patch("sku_scraper.cli.scraper.fetch_sku_groups", return_value=GROUPS), \
+             patch("sku_scraper.cli.scraper._make_session", return_value=MagicMock()):
+            result = runner.invoke(main, ["list", "--json"])
+        data = json.loads(result.output)
+        by_slug = {item["slug"]: item for item in data}
+        assert "bigquery" in by_slug
+        assert by_slug["bigquery"]["name"] == "BigQuery"
+        assert "cloud.google.com" in by_slug["bigquery"]["url"]
+
+    def test_json_empty_returns_empty_list(self, runner):
+        import json
+        with patch("sku_scraper.cli.scraper.fetch_sku_groups", return_value={}), \
+             patch("sku_scraper.cli.scraper._make_session", return_value=MagicMock()):
+            result = runner.invoke(main, ["list", "--json"])
+        assert result.exit_code == 0
+        assert json.loads(result.output) == []
 
 
 class TestScrapeCommand:
