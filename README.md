@@ -198,9 +198,15 @@ If there is no local cache the command will exit with an error. Build one first 
 
 ## Using as an AI agent skill
 
-The `skills/gcp-sku-groups.md` file is a portable skill definition that teaches an AI agent how to answer natural language questions using this CLI — questions like *"What SKU groups is 8ADF-0E5E-853F in?"* or *"Have any groups been added since my last cache build?"*
+The `skills/gcp-sku-groups/SKILL.md` file is a portable skill definition that teaches an AI agent how to answer natural language questions using this CLI — questions like *"What SKU groups is 8ADF-0E5E-853F in?"* or *"Have any groups been added since my last cache build?"*
 
-Install the CLI first (`pip install -e .`), then load the skill into your agent harness of choice. Every command that returns data supports `--json` for machine-readable output.
+Install the CLI first (`pip install -e .`), then activate the skill in your harness by symlinking the skill directory:
+
+```bash
+ln -s $(pwd)/skills/gcp-sku-groups ~/.claude/skills/gcp-sku-groups
+```
+
+Every command that returns data supports `--json` for machine-readable output.
 
 ## Shell completion
 
