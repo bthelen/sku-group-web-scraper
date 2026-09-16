@@ -195,6 +195,38 @@ Removed groups (1):
 
 If there is no local cache the command will exit with an error. Build one first with `build-cache`.
 
+#### Diff two groups against each other
+
+Compare the SKU IDs in two groups and write three file pairs — SKUs unique to each group and SKUs they share:
+
+```bash
+sku-scraper diff-sku-groups bigquery cloud-storage
+```
+
+Output files written to the current directory (or `--output-dir`):
+
+| File | Contents |
+|---|---|
+| `bigquery-only-skus.txt` / `bigquery-only-where-clause.txt` | SKUs in `bigquery` but not `cloud-storage` |
+| `cloud-storage-only-skus.txt` / `cloud-storage-only-where-clause.txt` | SKUs in `cloud-storage` but not `bigquery` |
+| `common-skus.txt` / `common-where-clause.txt` | SKUs present in both groups |
+
+Use `--json` to get the diff as structured data instead of writing files:
+
+```bash
+sku-scraper diff-sku-groups bigquery cloud-storage --json
+```
+
+```json
+{
+  "group_a": "bigquery",
+  "group_b": "cloud-storage",
+  "only_in_a": ["AAAA-0001"],
+  "only_in_b": ["DDDD-0004"],
+  "common": ["BBBB-0002", "CCCC-0003"]
+}
+```
+
 #### Clean up scrape output files
 
 Remove all `*-skus.txt` and `*-where-clause.txt` files written by previous scrape runs:

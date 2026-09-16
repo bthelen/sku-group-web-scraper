@@ -12,7 +12,9 @@ A skill for answering questions about Google Cloud SKU Groups using the `sku-scr
 - Looking up which SKU groups contain a specific SKU (by ID or name)
 - Listing all available SKU groups
 - Exporting SKU ID lists to files for use in SQL queries
+- Diffing the SKU IDs between two groups to find what's unique to each and what they share
 - Detecting changes in the live SKU group list since the last cache build
+- Cleaning up output files from previous runs
 
 ## Setup
 
@@ -149,6 +151,33 @@ Requires a cache with group names. If it fails, run `sku-scraper build-cache --f
 
 ---
 
+### Diff two groups against each other
+
+**Natural language:** "what SKUs are in bigquery but not cloud-storage?", "compare bigquery and cloud-storage SKUs",
+"which SKUs do these two groups share?", "find the overlap between two groups", "what's unique to compute-engine?"
+
+```bash
+sku-scraper diff-sku-groups <GROUP_A> <GROUP_B> --json
+```
+
+Returns which SKUs are exclusive to each group and which are shared:
+
+```json
+{
+  "group_a": "bigquery",
+  "group_b": "cloud-storage",
+  "only_in_a": ["AAAA-0001"],
+  "only_in_b": ["DDDD-0004"],
+  "common": ["BBBB-0002", "CCCC-0003"]
+}
+```
+
+Omit `--json` to write six output files instead (`<GROUP_A>-only-skus.txt`, `<GROUP_B>-only-skus.txt`,
+`common-skus.txt`, and the corresponding `-where-clause.txt` files). Use `--output-dir` to control
+where the files are written.
+
+---
+
 ### Export SKU IDs to files
 
 **Natural language:** "export bigquery SKU IDs", "scrape the cloud-storage group",
@@ -173,6 +202,23 @@ Writes two files per group (or one pair with `--single-file`):
 - `<group>-where-clause.txt` — SKU IDs quoted and comma-separated for SQL `WHERE` clauses
 
 Duplicate SKU IDs are deduplicated automatically.
+
+---
+
+### Clean up output files
+
+**Natural language:** "clean up the sku files", "remove the scraped files", "delete the output files"
+
+```bash
+# Clean current directory
+sku-scraper clean
+
+# Clean a specific directory
+sku-scraper clean --output-dir ~/sku-exports
+```
+
+Removes all `*-skus.txt` and `*-where-clause.txt` files (including `*-only-*` and `common-*` files
+from `diff-sku-groups` runs). Other files are left untouched.
 
 ---
 

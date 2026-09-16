@@ -13,6 +13,101 @@ GROUPS = {
 SKU_IDS = ["947D-3B46-7781", "C493-D992-4C50"]
 
 
+class TestDiffSkusCommand:
+    BQ_SKUS = ["AAAA-0001", "BBBB-0002", "CCCC-0003"]
+    CS_SKUS = ["BBBB-0002", "CCCC-0003", "DDDD-0004"]
+    # only-in-bq: AAAA-0001
+    # only-in-cs: DDDD-0004
+    # common:     BBBB-0002, CCCC-0003
+
+    def _invoke(self, runner, tmp_path, extra_args=None):
+        def side_effect(session, url):
+            if "bigquery" in url:
+                return self.BQ_SKUS
+            return self.CS_SKUS
+
+        with patch("sku_scraper.cli.scraper.fetch_sku_ids", side_effect=side_effect), \
+             patch("sku_scraper.cli.scraper._make_session", return_value=MagicMock()):
+            args = ["diff-sku-groups", "bigquery", "cloud-storage", "--output-dir", str(tmp_path)]
+            if extra_args:
+                args += extra_args
+            return runner.invoke(main, args)
+
+    def test_exits_ok(self, runner, tmp_path):
+        result = self._invoke(runner, tmp_path)
+        assert result.exit_code == 0
+
+    def test_writes_only_in_a_skus_file(self, runner, tmp_path):
+        self._invoke(runner, tmp_path)
+        lines = (tmp_path / "bigquery-only-skus.txt").read_text().splitlines()
+        assert lines == ["AAAA-0001"]
+
+    def test_writes_only_in_b_skus_file(self, runner, tmp_path):
+        self._invoke(runner, tmp_path)
+        lines = (tmp_path / "cloud-storage-only-skus.txt").read_text().splitlines()
+        assert lines == ["DDDD-0004"]
+
+    def test_writes_common_skus_file(self, runner, tmp_path):
+        self._invoke(runner, tmp_path)
+        lines = (tmp_path / "common-skus.txt").read_text().splitlines()
+        assert set(lines) == {"BBBB-0002", "CCCC-0003"}
+
+    def test_writes_where_clause_files(self, runner, tmp_path):
+        self._invoke(runner, tmp_path)
+        assert (tmp_path / "bigquery-only-where-clause.txt").exists()
+        assert (tmp_path / "cloud-storage-only-where-clause.txt").exists()
+        assert (tmp_path / "common-where-clause.txt").exists()
+
+    def test_only_in_a_where_clause_content(self, runner, tmp_path):
+        self._invoke(runner, tmp_path)
+        content = (tmp_path / "bigquery-only-where-clause.txt").read_text().strip()
+        assert content == '"AAAA-0001"'
+
+    def test_reports_counts(self, runner, tmp_path):
+        result = self._invoke(runner, tmp_path)
+        assert "1" in result.output  # only-in-bigquery count
+        assert "2" in result.output  # common count
+
+    def test_invalid_slug_rejected(self, runner, tmp_path):
+        with patch("sku_scraper.cli.scraper._make_session", return_value=MagicMock()):
+            result = runner.invoke(main, ["diff-sku-groups", "../bad", "cloud-storage", "--output-dir", str(tmp_path)])
+        assert result.exit_code != 0
+
+    def test_creates_output_dir_if_missing(self, runner, tmp_path):
+        new_dir = tmp_path / "nested"
+        result = self._invoke(runner, new_dir)
+        assert result.exit_code == 0
+        assert new_dir.exists()
+
+    def test_json_output_is_valid(self, runner, tmp_path):
+        import json
+        result = self._invoke(runner, tmp_path, ["--json"])
+        assert result.exit_code == 0
+        json.loads(result.output)
+
+    def test_json_output_structure(self, runner, tmp_path):
+        import json
+        result = self._invoke(runner, tmp_path, ["--json"])
+        data = json.loads(result.output)
+        assert data["group_a"] == "bigquery"
+        assert data["group_b"] == "cloud-storage"
+        assert data["only_in_a"] == ["AAAA-0001"]
+        assert data["only_in_b"] == ["DDDD-0004"]
+        assert set(data["common"]) == {"BBBB-0002", "CCCC-0003"}
+
+    def test_no_exclusive_skus_when_identical(self, runner, tmp_path):
+        import json
+        with patch("sku_scraper.cli.scraper.fetch_sku_ids", return_value=self.BQ_SKUS), \
+             patch("sku_scraper.cli.scraper._make_session", return_value=MagicMock()):
+            result = runner.invoke(main, [
+                "diff-sku-groups", "bigquery", "cloud-storage", "--output-dir", str(tmp_path), "--json"
+            ])
+        data = json.loads(result.output)
+        assert data["only_in_a"] == []
+        assert data["only_in_b"] == []
+        assert set(data["common"]) == set(self.BQ_SKUS)
+
+
 class TestCleanCommand:
     def test_removes_skus_files(self, runner, tmp_path):
         (tmp_path / "bigquery-skus.txt").write_text("947D-3B46-7781\n")

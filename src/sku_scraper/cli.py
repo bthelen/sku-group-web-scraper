@@ -114,6 +114,76 @@ def scrape(groups: tuple[str, ...], scrape_all: bool, output_dir: Path, single_f
         click.echo(f"Combined: {len(all_ids)} unique SKUs → {skus_path.name}, {where_path.name}")
 
 
+@main.command(name="diff-sku-groups")
+@click.argument("group_a", metavar="GROUP_A")
+@click.argument("group_b", metavar="GROUP_B")
+@click.option(
+    "--output-dir",
+    default=".",
+    show_default=True,
+    type=click.Path(file_okay=False, writable=True, path_type=Path),
+    help="Directory to write output files into.",
+)
+@click.option("--json", "output_json", is_flag=True, help="Output results as JSON instead of writing files.")
+def diff_skus(group_a: str, group_b: str, output_dir: Path, output_json: bool) -> None:
+    """Compare SKU IDs between two groups and write diff files.
+
+    Scrapes GROUP_A and GROUP_B and writes three file pairs:
+
+    \b
+      <GROUP_A>-only-skus.txt / <GROUP_A>-only-where-clause.txt
+      <GROUP_B>-only-skus.txt / <GROUP_B>-only-where-clause.txt
+      common-skus.txt         / common-where-clause.txt
+    """
+    try:
+        slug_a = scraper.validate_slug(group_a)
+        slug_b = scraper.validate_slug(group_b)
+    except ValueError as exc:
+        raise click.UsageError(str(exc)) from exc
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    session = scraper._make_session()
+    url_a = f"https://cloud.google.com/skus/sku-groups/{slug_a}"
+    url_b = f"https://cloud.google.com/skus/sku-groups/{slug_b}"
+
+    try:
+        ids_a = scraper.fetch_sku_ids(session, url_a)
+    except (requests.RequestException, ValueError) as exc:
+        raise click.ClickException(f"Failed to fetch {slug_a}: {exc}") from exc
+
+    try:
+        ids_b = scraper.fetch_sku_ids(session, url_b)
+    except (requests.RequestException, ValueError) as exc:
+        raise click.ClickException(f"Failed to fetch {slug_b}: {exc}") from exc
+
+    set_a = dict.fromkeys(ids_a)
+    set_b = dict.fromkeys(ids_b)
+    only_a = [s for s in set_a if s not in set_b]
+    only_b = [s for s in set_b if s not in set_a]
+    common = [s for s in set_a if s in set_b]
+
+    if output_json:
+        click.echo(json.dumps({
+            "group_a": slug_a,
+            "group_b": slug_b,
+            "only_in_a": only_a,
+            "only_in_b": only_b,
+            "common": common,
+        }, indent=2))
+        return
+
+    writer.write_skus_file(f"{slug_a}-only", only_a, output_dir)
+    writer.write_where_clause_file(f"{slug_a}-only", only_a, output_dir)
+    writer.write_skus_file(f"{slug_b}-only", only_b, output_dir)
+    writer.write_where_clause_file(f"{slug_b}-only", only_b, output_dir)
+    writer.write_skus_file("common", common, output_dir)
+    writer.write_where_clause_file("common", common, output_dir)
+
+    click.echo(f"Only in {slug_a}: {len(only_a)} SKUs")
+    click.echo(f"Only in {slug_b}: {len(only_b)} SKUs")
+    click.echo(f"Common:          {len(common)} SKUs")
+
+
 @main.command(name="clean")
 @click.option(
     "--output-dir",
