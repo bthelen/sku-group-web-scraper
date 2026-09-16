@@ -13,6 +13,50 @@ GROUPS = {
 SKU_IDS = ["947D-3B46-7781", "C493-D992-4C50"]
 
 
+class TestCleanCommand:
+    def test_removes_skus_files(self, runner, tmp_path):
+        (tmp_path / "bigquery-skus.txt").write_text("947D-3B46-7781\n")
+        (tmp_path / "cloud-storage-skus.txt").write_text("C493-D992-4C50\n")
+        result = runner.invoke(main, ["clean", "--output-dir", str(tmp_path)])
+        assert result.exit_code == 0
+        assert not (tmp_path / "bigquery-skus.txt").exists()
+        assert not (tmp_path / "cloud-storage-skus.txt").exists()
+
+    def test_removes_where_clause_files(self, runner, tmp_path):
+        (tmp_path / "bigquery-where-clause.txt").write_text('"947D-3B46-7781"\n')
+        result = runner.invoke(main, ["clean", "--output-dir", str(tmp_path)])
+        assert result.exit_code == 0
+        assert not (tmp_path / "bigquery-where-clause.txt").exists()
+
+    def test_reports_each_deleted_file(self, runner, tmp_path):
+        (tmp_path / "bigquery-skus.txt").write_text("x\n")
+        result = runner.invoke(main, ["clean", "--output-dir", str(tmp_path)])
+        assert "bigquery-skus.txt" in result.output
+
+    def test_reports_nothing_when_no_files(self, runner, tmp_path):
+        result = runner.invoke(main, ["clean", "--output-dir", str(tmp_path)])
+        assert result.exit_code == 0
+        assert "No files" in result.output
+
+    def test_does_not_remove_unrelated_txt_files(self, runner, tmp_path):
+        (tmp_path / "notes.txt").write_text("keep me\n")
+        (tmp_path / "bigquery-skus.txt").write_text("x\n")
+        runner.invoke(main, ["clean", "--output-dir", str(tmp_path)])
+        assert (tmp_path / "notes.txt").exists()
+
+    def test_defaults_to_current_directory(self, runner, tmp_path):
+        (tmp_path / "combined-skus.txt").write_text("x\n")
+        result = runner.invoke(main, ["clean", "--output-dir", str(tmp_path)])
+        assert result.exit_code == 0
+        assert not (tmp_path / "combined-skus.txt").exists()
+
+    def test_reports_count_of_deleted_files(self, runner, tmp_path):
+        (tmp_path / "bigquery-skus.txt").write_text("x\n")
+        (tmp_path / "bigquery-where-clause.txt").write_text("x\n")
+        result = runner.invoke(main, ["clean", "--output-dir", str(tmp_path)])
+        assert "2" in result.output
+
+
 class TestCompletionCommand:
     def test_bash_completion_exits_ok(self, runner):
         result = runner.invoke(main, ["completion", "bash"])

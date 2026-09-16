@@ -91,7 +91,6 @@ This file creates a string which can be pasted in a where clause for manual quer
 ```
 "947D-3B46-7781", "0752-7FDA-AF5E", "C493-D992-4C50", ...
 ```
-
 ### Searching for SKU groups by ID or name
 
 The `search` command lets you look up which SKU groups contain a given SKU ID or name. It works from a local cache so it doesn't need to re-fetch every group page each time you search.
@@ -195,6 +194,22 @@ Removed groups (1):
 ```
 
 If there is no local cache the command will exit with an error. Build one first with `build-cache`.
+
+#### Clean up scrape output files
+
+Remove all `*-skus.txt` and `*-where-clause.txt` files written by previous scrape runs:
+
+```bash
+sku-scraper clean
+```
+
+To clean a specific output directory:
+
+```bash
+sku-scraper clean --output-dir ~/sku-exports
+```
+
+Other files in the directory are left untouched.
 
 ## Using as an AI agent skill
 

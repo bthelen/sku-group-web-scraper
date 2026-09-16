@@ -114,6 +114,33 @@ def scrape(groups: tuple[str, ...], scrape_all: bool, output_dir: Path, single_f
         click.echo(f"Combined: {len(all_ids)} unique SKUs → {skus_path.name}, {where_path.name}")
 
 
+@main.command(name="clean")
+@click.option(
+    "--output-dir",
+    default=".",
+    show_default=True,
+    type=click.Path(file_okay=False, path_type=Path),
+    help="Directory to clean (same value passed to scrape).",
+)
+def clean(output_dir: Path) -> None:
+    """Remove SKU output files written by previous scrape runs.
+
+    Deletes all *-skus.txt and *-where-clause.txt files from the output
+    directory. Other files are left untouched.
+    """
+    targets = sorted([
+        *output_dir.glob("*-skus.txt"),
+        *output_dir.glob("*-where-clause.txt"),
+    ])
+    if not targets:
+        click.echo("No files to clean.")
+        return
+    for path in targets:
+        path.unlink()
+        click.echo(f"  removed  {path.name}")
+    click.echo(f"\n{len(targets)} file(s) removed.")
+
+
 @main.command(name="build-cache")
 @click.option("--workers", default=10, show_default=True, help="Parallel fetch workers.")
 @click.option("--force", is_flag=True, help="Rebuild even if cache already exists.")
