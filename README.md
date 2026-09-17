@@ -247,13 +247,25 @@ Other files in the directory are left untouched.
 
 The `skills/gcp-sku-groups/SKILL.md` file is a portable skill definition that teaches an AI agent how to answer natural language questions using this CLI — questions like *"What SKU groups is 8ADF-0E5E-853F in?"* or *"Have any groups been added since my last cache build?"*
 
-Install the CLI first (`pip install -e .`), then activate the skill in your harness by symlinking the skill directory:
+Every command that returns data supports `--json` for machine-readable output.
+
+### Claude Code (local, symlink)
+
+Install the CLI first (`pip install -e .`), then activate the skill by symlinking the skill directory:
 
 ```bash
 ln -s $(pwd)/skills/gcp-sku-groups ~/.claude/skills/gcp-sku-groups
 ```
 
-Every command that returns data supports `--json` for machine-readable output.
+### Hosted harnesses (zip upload)
+
+For hosted AI environments that accept skill zip files, build a self-contained package with the CLI wheel bundled inside:
+
+```bash
+bash scripts/build-skill-zip.sh
+```
+
+This produces `dist/gcp-sku-groups.zip` containing `SKILL.md`, `setup.sh`, and the pre-built wheel. Upload the zip to your harness, then run `setup.sh` once to install the CLI into the harness's Python environment.
 
 ## Shell completion
 
